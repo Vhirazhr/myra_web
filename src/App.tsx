@@ -422,7 +422,7 @@ const pageTitle: Record<string, [string, string]> = {
   ["voice-notes"]: ["Voice Note Configuration", "Manage voice note generation and delivery."],
   logs: ["Conversation Logs", "Review message activity and moderation signals."],
   storage: ["Storage Manager", "Monitor media, conversation, and memory storage."],
-  backup: ["Backup & Restore", "Protect and transfer your control center configuration."],
+  backup: ["Backup & Restore", "Protect and transfer your MYRA configuration."],
   security: ["Security", "Manage sessions, admin access, and masked credentials."],
   environment: ["Environment Settings", "Review prototype service and integration settings."],
 };
@@ -501,11 +501,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
         <span className="brand-mark">
           <Icon name="spark" size={20} />
         </span>
-        <span>
-          AI COMPANION
-          <br />
-          <b>CONTROL CENTER</b>
-        </span>
+        <span className="brand-name">MYRA</span>
       </div>
       <form className="login-card" onSubmit={submit}>
         <div className="login-symbol">
@@ -513,7 +509,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
         </div>
         <p className="eyebrow">Private administration</p>
         <h1>Welcome back</h1>
-        <p className="muted">Enter your credentials to access the control center.</p>
+        <p className="muted">Enter your credentials to access MYRA.</p>
         {error && (
           <div className="form-error">
             <Icon name="x" size={16} />
@@ -550,7 +546,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
           <span>Protected access</span>
         </div>
         <Button type="submit" disabled={loading}>
-          {loading ? "Authenticating…" : "Enter control center"}{" "}
+          {loading ? "Authenticating…" : "Enter MYRA"}{" "}
           {!loading && <Icon name="chevron" size={16} />}
         </Button>
         <small>This is a simulated prototype login. No credentials are transmitted.</small>
@@ -579,12 +575,7 @@ function Sidebar({
         <span className="brand-mark">
           <Icon name="spark" size={18} />
         </span>
-        {!collapsed && (
-          <div>
-            <b>AI COMPANION</b>
-            <small>CONTROL CENTER</small>
-          </div>
-        )}
+        {!collapsed && <div className="brand-name">MYRA</div>}
         <button onClick={() => setCollapsed(!collapsed)}>
           <Icon name="chevron" size={16} />
         </button>
@@ -637,7 +628,7 @@ function Header({
   return (
     <header className="topbar">
       <div className="top-title">
-        <span>Control Center</span>
+        <span>MYRA</span>
         <Icon name="chevron" size={12} />
         <b>{title}</b>
       </div>
@@ -2667,9 +2658,7 @@ function GenericPage({ type, toast }: { type: string; toast: (s: string) => void
     <div className="page">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">
-            {secure || backup || storage || env ? "System" : "Control Center"}
-          </p>
+          <p className="eyebrow">{secure || backup || storage || env ? "System" : "MYRA"}</p>
           <h1>{title}</h1>
           <p>{desc}</p>
         </div>
@@ -2808,9 +2797,7 @@ export default function App() {
   }
   const title = useMemo(
     () =>
-      nav.flatMap((x) => x.items).find((x) => x[2] === page)?.[0] ||
-      pageTitle[page]?.[0] ||
-      "Control Center",
+      nav.flatMap((x) => x.items).find((x) => x[2] === page)?.[0] || pageTitle[page]?.[0] || "MYRA",
     [page],
   );
   if (!authed)

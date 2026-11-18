@@ -122,6 +122,11 @@
   flex: 1;
   white-space: nowrap;
 }
+.side-brand .brand-name {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+}
 .side-brand b {
   font-size: 12px;
   letter-spacing: 0.08em;
@@ -2584,6 +2589,11 @@ input[type="range"]::-webkit-slider-thumb {
   gap: 10px;
   font-size: 10px;
   letter-spacing: 0.08em;
+}
+.login-brand .brand-name {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
 }
 .login-brand b {
   color: var(--pink);
