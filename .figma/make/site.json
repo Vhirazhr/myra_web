@@ -1,1 +1,10 @@
-{}
+{
+  "description": "A private admin dashboard for managing AI characters, fictional universes, social connections, stories, simulations, and platform settings in one place.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
