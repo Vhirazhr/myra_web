@@ -499,13 +499,13 @@ function Login({ onLogin }: { onLogin: () => void }) {
       <div className="login-orb orb-b" />
       <div className="login-brand">
         <span className="brand-mark">
-          <Icon name="spark" size={20} />
+          <img src="/myra-logo.png" alt="MYRA logo" />
         </span>
         <span className="brand-name">MYRA</span>
       </div>
       <form className="login-card" onSubmit={submit}>
         <div className="login-symbol">
-          <Icon name="shield" size={25} />
+          <img src="/myra-logo.png" alt="MYRA" />
         </div>
         <p className="eyebrow">Private administration</p>
         <h1>Welcome back</h1>
@@ -573,7 +573,7 @@ function Sidebar({
     <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
       <div className="side-brand">
         <span className="brand-mark">
-          <Icon name="spark" size={18} />
+          <img src="/myra-logo.png" alt="MYRA logo" />
         </span>
         {!collapsed && <div className="brand-name">MYRA</div>}
         <button onClick={() => setCollapsed(!collapsed)}>
