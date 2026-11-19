@@ -112,20 +112,6 @@ export const relationship: Spec = {
     area("history", "Relationship history"),
   ],
 };
-export const provider: Spec = {
-  table: "providers",
-  singular: "provider",
-  fields: [
-    text("name", "Provider name", true),
-    choose("adapter", "Provider type", ["openrouter", "openai", "compatible"]),
-    text("model", "Model ID", true),
-    number("priority", "Fallback priority", 1, 1, 50),
-    number("temperature", "Temperature", 0.85, 0, 2, "0.1"),
-    number("input_price", "Input USD per million tokens", 0, 0, 10000, "any"),
-    number("output_price", "Output USD per million tokens", 0, 0, 10000, "any"),
-    { key: "enabled", label: "Enabled", type: "check", initial: true },
-  ],
-};
 export const conversation: Spec = {
   table: "conversations",
   singular: "conversation",
@@ -273,8 +259,6 @@ export const catalog: Record<string, Spec> = {
       time("due_at", "Deliver at", "datetime-local"),
     ],
   },
-  providers: provider,
-  models: provider,
   memory,
   stories: story,
   "story-scheduler": story,
