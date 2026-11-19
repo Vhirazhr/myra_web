@@ -53,7 +53,7 @@ export const nav = [
     items: [
       ["Story Studio", "play", "stories"],
       ["Story Scheduler", "calendar", "story-scheduler"],
-      ["Media Library", "image", "media"],
+      ["Media Library", "image", "media"],\n      ["Character Media Studio", "image", "character-media"],
       ["Gallery Manager", "image", "gallery"],
     ],
   },
