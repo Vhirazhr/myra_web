@@ -115,6 +115,10 @@ function Thread({ id }: { id: string }) {
       return;
     }
     try {
+      setRecordError("");
+      if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+        throw new Error("Audio recording is not supported in this browser.");
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const r = new MediaRecorder(stream);
       recorder.current = r;
@@ -145,6 +149,9 @@ function Thread({ id }: { id: string }) {
       </Card>
     );
   const ordered = (messages.data?.pages.flat() || []).reverse();
+  const visibleMessages = ordered.filter((message) =>
+    message.body.toLowerCase().includes(search.toLowerCase()),
+  );
   return (
     <div className="page">
       <Heading
@@ -169,7 +176,7 @@ function Thread({ id }: { id: string }) {
           </Button>
           <Button
             secondary
-            disabled={action.isPending}
+            disabled={action.isPending || !ordered.length}
             onClick={() =>
               action.mutate(async () => {
                 await call("summarize", { id });
@@ -182,17 +189,17 @@ function Thread({ id }: { id: string }) {
           <Button
             secondary
             icon="trash"
-            disabled={action.isPending}
+            disabled={action.isPending || !ordered.length}
             onClick={() => {
               if (
                 !window.confirm(
-                  "Hapus SEMUA pesan di percakapan ini? Riwayat chat dan lampiran terkait akan dihapus. Karakter serta pengaturan percakapan tetap ada. Tindakan ini tidak dapat dibatalkan.",
+                  "Delete every message in this conversation? The message history and related attachments will be removed. Characters and conversation settings will remain. This cannot be undone.",
                 )
               ) return;
               action.mutate(async () => {
                 const count = await clearConversationMessages(id);
                 setReply(null);
-                notify(count + " pesan berhasil dihapus");
+                notify(count + " messages deleted");
               });
             }}
           >
@@ -217,9 +224,8 @@ function Thread({ id }: { id: string }) {
               {messages.isLoading ? "Loading history…" : "Start the conversation."}
             </p>
           )}
-          {ordered
-            .filter((m) => m.body.toLowerCase().includes(search.toLowerCase()))
-            .map((m) => {
+          {!!ordered.length && !visibleMessages.length && <p className="empty">No messages match this search.</p>}
+          {visibleMessages.map((m) => {
               const parent = ordered.find((p) => p.id === m.reply_to);
               const liked = reactions.data?.find((r) => r.message_id === m.id && r.emoji === "♥");
               return (
@@ -240,9 +246,10 @@ function Thread({ id }: { id: string }) {
                     />
                   )}
                   <div className="message-actions">
-                    <button onClick={() => setReply(m)}>Reply</button>
-                    <button
-                      aria-label="React to message"
+                    <button type="button" aria-label="Reply to message" onClick={() => setReply(m)}>Reply</button>
+                    <button type="button"
+                      aria-label={liked ? "Remove reaction" : "Like message"}
+                      aria-pressed={!!liked} disabled={action.isPending}
                       onClick={() =>
                         action.mutate(() =>
                           liked
@@ -254,23 +261,20 @@ function Thread({ id }: { id: string }) {
                       {liked ? "♥ 1" : "♡"}
                     </button>
                     {m.role === "user" && (
-                      <button
-                        disabled={action.isPending}
-                        onClick={() => action.mutate(() => call("generate", { id: m.id }))}
-                      >
-                        Request response
+                      <button type="button" disabled={action.isPending}
+                        onClick={() => action.mutate(() => call("generate", { id: m.id }))}>
+                        Generate response
                       </button>
                     )}
                     {m.role === "assistant" && !m.attachment && (
-                      <button
-                        disabled={action.isPending}
-                        onClick={() => action.mutate(() => call("voice-note", { id: m.id }))}
-                      >
+                      <button type="button" disabled={action.isPending}
+                        onClick={() => action.mutate(() => call("voice-note", { id: m.id }))}>
                         Generate voice note
                       </button>
                     )}
                     {m.mime?.startsWith("audio/") && !m.transcript && (
-                      <button onClick={() => action.mutate(() => call("transcribe", { id: m.id }))}>
+                      <button type="button" disabled={action.isPending}
+                        onClick={() => action.mutate(() => call("transcribe", { id: m.id }))}>
                         Transcribe
                       </button>
                     )}
@@ -281,7 +285,7 @@ function Thread({ id }: { id: string }) {
                       onClick={() => {
                         if (
                           !window.confirm(
-                            "Hapus pesan ini? Balasan dan pesan terkait yang bergantung padanya juga akan ikut terhapus.",
+                            "Delete this message? Replies and dependent messages will also be deleted.",
                           )
                         ) return;
                         action.mutate(async () => {
@@ -289,13 +293,13 @@ function Thread({ id }: { id: string }) {
                           setReply(null);
                           notify(
                             count > 1
-                              ? "Pesan dan " + (count - 1) + " pesan terkait berhasil dihapus"
-                              : "Pesan berhasil dihapus",
+                              ? "Message and " + (count - 1) + " related messages deleted"
+                              : "Message deleted",
                           );
                         });
                       }}
                     >
-                      Hapus untuk semua
+                      Delete for everyone
                     </button>
                   </div>
                 </article>
@@ -344,7 +348,8 @@ function Thread({ id }: { id: string }) {
           </label>
           <label>
             Message
-            <textarea value={body} onChange={(e) => type(e.target.value)} maxLength={24000} />
+            <textarea value={body} onChange={(e) => type(e.target.value)} maxLength={24000}
+              placeholder="Write a message…" />
           </label>
           <div className="wizard-actions">
             <input
@@ -354,14 +359,20 @@ function Thread({ id }: { id: string }) {
               accept="image/*,audio/*,video/*"
               onChange={(e) => setFile(e.target.files?.[0] || null)}
             />
-            <Button secondary onClick={record}>
+            <Button secondary disabled={action.isPending} onClick={record}>
               {recording ? "Stop recording" : "Record audio"}
             </Button>
-            <Button type="submit" disabled={action.isPending || recording}>
+            <Button type="submit" disabled={action.isPending || recording || (!body.trim() && !file)}>
               {action.isPending ? "Working…" : "Send"}
             </Button>
           </div>
-          {file && <Badge>{file.name}</Badge>}
+          {file && <div className="attachment-chip">
+            <Badge>{file.name}</Badge>
+            <button type="button" aria-label="Remove attachment" onClick={() => {
+              setFile(null);
+              if (input.current) input.current.value = "";
+            }}>Remove</button>
+          </div>}
           {(action.error || recordError) && (
             <p className="form-error" role="alert">
               {action.error ? errorText(action.error) : recordError}
