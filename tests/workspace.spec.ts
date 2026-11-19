@@ -228,12 +228,12 @@ test("9 · non-admin and second admin cannot access or modify private data", asy
   const anon = createClient(url, key, options);
   expect((await anon.from("characters").select("*")).error).toBeTruthy();
 });
-test("4–5 · real inference, persisted memory, scoped retrieval and group reply", async ({
+test("4–5 · Gemini inference, persisted memory, scoped retrieval and group reply", async ({
   page,
 }) => {
   test.skip(
-    !process.env.MYRA_E2E_MODEL,
-    "Set MYRA_E2E_MODEL and configure the matching server-side provider.",
+    !process.env.MYRA_E2E_GEMINI && !process.env.MYRA_E2E_MODEL,
+    "Set MYRA_E2E_GEMINI and configure GEMINI_API_KEY in the local Edge Function environment.",
   );
   const r = ok(
     await client
@@ -242,16 +242,10 @@ test("4–5 · real inference, persisted memory, scoped retrieval and group repl
       .select()
       .single(),
   ).data!;
-  await page.goto("/providers");
+  await page.goto("/google-ai");
   await login(page, email);
-  const d = await create(page, "provider");
-  await d.getByLabel("Provider name").fill("Inference test");
-  await d.getByLabel("Provider type").selectOption(process.env.MYRA_E2E_ADAPTER || "compatible");
-  await d.getByLabel("Model ID").fill(process.env.MYRA_E2E_MODEL!);
-  await d.getByLabel("Temperature").fill("0");
-  await submit(page, "provider");
-  await page.getByRole("button", { name: "Test connection" }).click();
-  await expect(page.getByRole("status")).not.toHaveText("Saved provider", { timeout: 95000 });
+  await page.getByRole("button", { name: "Test Gemini connection" }).click();
+  await expect(page.getByRole("status")).toContainText(/MYRA|Gemini|Google/i, { timeout: 95000 });
   await page.goto("/chat");
   const form = await create(page, "conversation");
   await form.getByLabel("Conversation title").fill("Memory test");
