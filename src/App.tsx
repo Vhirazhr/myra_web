@@ -39,7 +39,7 @@ function Page({ page }: { page: string }) {
       </div>
     );
   }
-  if (["personality", "appearance", "voice", "voice-notes"].includes(page))
+  if (["personality", "appearance", "voice"].includes(page))
     return <CharacterLab page={page} />;
   if (page === "google-ai") return <GoogleAIEngine />;
   if (page === "providers" || page === "models") return <Navigate replace to="/google-ai" />;
@@ -116,10 +116,28 @@ function Shell({ session }: { session: Session }) {
     navigate = useNavigate(),
     page = location.pathname.split("/")[1] || "dashboard",
     title = items.find((i) => i.id === page)?.name || "Dashboard";
-  const [collapsed, setCollapsed] = useState(() => window.innerWidth < 780),
-    [dark, setDark] = useState(true),
+  const [collapsed, setCollapsed] = useState(
+      () => window.innerWidth <= 900 || window.localStorage.getItem("myra.sidebar.collapsed") === "true",
+    ),
+    [dark, setDark] = useState(() => window.localStorage.getItem("myra.theme") !== "light"),
+    [isCompact, setIsCompact] = useState(() => window.innerWidth <= 900),
     [search, setSearch] = useState(""),
     [realtime, setRealtime] = useState("");
+  useEffect(() => {
+    window.localStorage.setItem("myra.theme", dark ? "dark" : "light");
+  }, [dark]);
+  useEffect(() => {
+    window.localStorage.setItem("myra.sidebar.collapsed", String(collapsed));
+  }, [collapsed]);
+  useEffect(() => {
+    const handleResize = () => {
+      const compact = window.innerWidth <= 900;
+      setIsCompact(compact);
+      if (compact) setCollapsed(true);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
   const chars = useRows("characters"),
     worlds = useRows("universes");
   const logout = useMutation({
@@ -140,6 +158,7 @@ function Shell({ session }: { session: Session }) {
   const go = (id: string) => {
     navigate("/" + id);
     setSearch("");
+    if (window.innerWidth <= 900) setCollapsed(true);
     window.scrollTo(0, 0);
   };
   const matches = [
@@ -164,6 +183,10 @@ function Shell({ session }: { session: Session }) {
         collapsed={collapsed}
         setCollapsed={setCollapsed}
       />
+      {isCompact && !collapsed && (
+        <button type="button" className="sidebar-backdrop" aria-label="Close navigation"
+          onClick={() => setCollapsed(true)} />
+      )}
       <div className="shell">
         <header className="topbar">
           <div className="top-title">
@@ -175,6 +198,9 @@ function Shell({ session }: { session: Session }) {
             <Icon name="search" />
             <input
               aria-label="Search workspace"
+              aria-autocomplete="list"
+              aria-expanded={!!search}
+              aria-controls="workspace-search-results"
               placeholder="Search characters, universes, settings…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -184,11 +210,14 @@ function Shell({ session }: { session: Session }) {
               }}
             />
             {search && (
-              <div className="search-results">
+              <button type="button" className="search-clear" aria-label="Clear search"
+                onClick={() => setSearch("")}><Icon name="x" size={14} /></button>
+            )}
+            {search && (
+              <div className="search-results" id="workspace-search-results" role="listbox">
                 {matches.map((m, i) => (
-                  <button key={i} onClick={() => go(m.id)}>
-                    {m.name}
-                  </button>
+                  <button type="button" role="option" aria-selected={false} key={m.id + i}
+                    onClick={() => go(m.id)}>{m.name}</button>
                 ))}
                 {!matches.length && <small>No results</small>}
               </div>
@@ -202,18 +231,19 @@ function Shell({ session }: { session: Session }) {
                   ? "Reconnecting…"
                   : ""}
             </small>
-            <button
+            <button type="button"
               className="icon-btn"
               aria-label="Notifications"
               onClick={() => go("notifications")}
             >
               <Icon name="bell" />
             </button>
-            <button className="icon-btn" aria-label="Toggle theme" onClick={() => setDark(!dark)}>
+            <button type="button" className="icon-btn" aria-label="Toggle theme"
+              aria-pressed={!dark} onClick={() => setDark(!dark)}>
               <Icon name={dark ? "sun" : "moon"} />
             </button>
-            <Button secondary onClick={() => logout.mutate()}>
-              Sign out
+            <Button secondary disabled={logout.isPending} onClick={() => logout.mutate()}>
+              {logout.isPending ? "Signing out…" : "Sign out"}
             </Button>
           </div>
         </header>
