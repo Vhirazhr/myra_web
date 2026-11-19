@@ -373,7 +373,22 @@ export function Settings({ page, title }: { page: string; title: string }) {
       <Heading
         title={title}
         section={page === "simulation" ? "Life Simulation" : "Configuration"}
+        description={page === "proactive"
+          ? "Control when your characters may start a conversation. Both the global setting and the individual conversation opt-in must be enabled."
+          : undefined}
       />
+      {page === "proactive" && (
+        <Card className="wizard-form">
+          <h3>How character-initiated messages work</h3>
+          <p>
+            Enable proactive messaging here, then open the character conversation and enable
+            “Allow character-initiated messages” in its Settings. The cloud worker checks for due
+            messages every five minutes once the Supabase Cron schedule is configured. Quiet hours
+            and the interval below are respected. A character will not send another unsolicited
+            message until you reply to the previous one.
+          </p>
+        </Card>
+      )}
       {settings.isError ? (
         <p role="alert">{settings.error.message}</p>
       ) : (
