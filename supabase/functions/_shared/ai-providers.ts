@@ -19,6 +19,7 @@ type Provider = {
   output_price?: number;
   base_url?: string;
   secret_name?: string;
+  supports_vision?: boolean;
 };
 
 type CompletionResult = {
@@ -488,7 +489,7 @@ async function recordUsage(
     ? (Number(result.inputTokens || 0) * inputPrice +
       Number(result.outputTokens || 0) * outputPrice) / 1000000
     : null;
-  checked(await ctx.service.from("usage_logs").insert({
+  const logged = await ctx.service.from("usage_logs").insert({
     owner_id: ctx.actor,
     operation,
     provider_id: provider.id || null,
@@ -497,7 +498,13 @@ async function recordUsage(
     output_tokens: result?.outputTokens ?? null,
     cost,
     error: error.slice(0, 1200),
-  }));
+  });
+  if (logged.error) {
+    console.error("[MYRA] Could not record provider usage", {
+      provider: provider.name,
+      error: logged.error.message,
+    });
+  }
 }
 
 function implicitGemini(): Provider {
@@ -540,6 +547,16 @@ export async function completeWithProviders(
     }
   }
 
+  const hasImageInput = messages.some((message) =>
+    Array.isArray(message.content) && message.content.some((part) => part.type === "image_url")
+  );
+  if (hasImageInput) {
+    providers = providers.filter((provider) => provider.supports_vision === true);
+    if (!providers.length) {
+      throw new HttpError(422, "No enabled AI provider is configured to accept image input. Enable vision support on a compatible model.");
+    }
+  }
+
   providers.sort((a, b) => Number(a.priority ?? 999) - Number(b.priority ?? 999));
   if (!providers.length) {
     throw new HttpError(
@@ -558,15 +575,7 @@ export async function completeWithProviders(
     let streamedAnswer = "";
     const emit = async (partial: string) => {
       streamedAnswer = partial;
-      if (!onDelta) return;
-      try {
-        await onDelta(partial);
-      } catch (error) {
-        console.error("[MYRA] Could not persist a streamed reply chunk", {
-          provider: provider.name,
-          error: error instanceof Error ? error.message : "Database update failed",
-        });
-      }
+      if (onDelta) await onDelta(partial);
     };
     try {
       const key = providerKey(provider);
@@ -633,7 +642,9 @@ export async function completeWithProviders(
         partialOutput: streamedAnswer.length > 0,
         error: failure.message,
       });
-      if (streamedAnswer.length > 0) throw failure;
+      if (streamedAnswer.length > 0 || failure.status === 413 || failure.status === 422) {
+        throw failure;
+      }
     }
   }
 
