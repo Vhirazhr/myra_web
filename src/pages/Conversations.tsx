@@ -7,6 +7,8 @@ import { Editor } from "../components/Editor";
 import { conversation } from "../services/catalog";
 import {
   call,
+  clearConversationMessages,
+  deleteMessage,
   discardAsset,
   errorText,
   refresh,
@@ -177,6 +179,25 @@ function Thread({ id }: { id: string }) {
           >
             Summarize memory
           </Button>
+          <Button
+            secondary
+            icon="trash"
+            disabled={action.isPending || !ordered.length}
+            onClick={() => {
+              if (
+                !window.confirm(
+                  "Hapus SEMUA pesan di percakapan ini? Riwayat chat dan lampiran terkait akan dihapus. Karakter serta pengaturan percakapan tetap ada. Tindakan ini tidak dapat dibatalkan.",
+                )
+              ) return;
+              action.mutate(async () => {
+                const count = await clearConversationMessages(id);
+                setReply(null);
+                notify(count + " pesan berhasil dihapus");
+              });
+            }}
+          >
+            Hapus semua pesan
+          </Button>
         </div>
         {(messages.error || reactions.error || chars.error) && (
           <p role="alert">{errorText(messages.error || reactions.error || chars.error)}</p>
@@ -253,6 +274,29 @@ function Thread({ id }: { id: string }) {
                         Transcribe
                       </button>
                     )}
+                    <button
+                      type="button"
+                      className="message-delete"
+                      disabled={action.isPending}
+                      onClick={() => {
+                        if (
+                          !window.confirm(
+                            "Hapus pesan ini? Balasan dan pesan terkait yang bergantung padanya juga akan ikut terhapus.",
+                          )
+                        ) return;
+                        action.mutate(async () => {
+                          const count = await deleteMessage(id, m.id);
+                          if (reply?.id === m.id) setReply(null);
+                          notify(
+                            count > 1
+                              ? "Pesan dan " + (count - 1) + " pesan terkait berhasil dihapus"
+                              : "Pesan berhasil dihapus",
+                          );
+                        });
+                      }}
+                    >
+                      Hapus
+                    </button>
                   </div>
                 </article>
               );
