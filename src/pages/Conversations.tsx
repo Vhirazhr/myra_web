@@ -212,7 +212,7 @@ function Thread({ id }: { id: string }) {
                   {m.transcript && <p>{m.transcript}</p>}
                   {m.attachment && (
                     <Media
-                      bucket={m.role === "assistant" ? "voice-media" : "conversation-media"}
+                      bucket={m.attachment_bucket || (m.role === "assistant" && m.mime?.startsWith("audio/") ? "voice-media" : "conversation-media")}
                       path={m.attachment}
                       mime={m.mime}
                     />
