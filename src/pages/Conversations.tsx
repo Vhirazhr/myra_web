@@ -182,7 +182,7 @@ function Thread({ id }: { id: string }) {
           <Button
             secondary
             icon="trash"
-            disabled={action.isPending || !ordered.length}
+            disabled={action.isPending}
             onClick={() => {
               if (
                 !window.confirm(
@@ -286,7 +286,7 @@ function Thread({ id }: { id: string }) {
                         ) return;
                         action.mutate(async () => {
                           const count = await deleteMessage(id, m.id);
-                          if (reply?.id === m.id) setReply(null);
+                          setReply(null);
                           notify(
                             count > 1
                               ? "Pesan dan " + (count - 1) + " pesan terkait berhasil dihapus"
@@ -295,7 +295,7 @@ function Thread({ id }: { id: string }) {
                         });
                       }}
                     >
-                      Hapus
+                      Hapus untuk semua
                     </button>
                   </div>
                 </article>
