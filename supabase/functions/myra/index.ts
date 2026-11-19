@@ -121,7 +121,7 @@ export const handler = endpoint(async (req) => {
     return { messageId: message.id };
   }
   if (b.action === "generate") return generate(ctx, id(b.id));
-  if (b.action === "test-google" || b.action === "test-provider") {
+  if (b.action === "test-google") {
     return {
       text: await completion(ctx, "connection test", [{
         role: "user",
