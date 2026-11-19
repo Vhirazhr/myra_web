@@ -6,6 +6,42 @@ export const handler = endpoint(async (req) => {
     throw new HttpError(429, "Too many requests. Try again in one minute.");
   }
   const b = await req.json();
+  if (b.action === "send-media") {
+    const assetId = id(b.assetId);
+    const conversationId = id(b.conversationId);
+    const asset = checked(
+      await db.from("media_assets").select("*").eq("id", assetId).eq("owner_id", actor).single(),
+    );
+    if (!asset.character_id || !["image/", "video/"].some((prefix) => asset.mime.startsWith(prefix))) {
+      throw new HttpError(422, "Select a character image or video.");
+    }
+    if (asset.bucket !== "stories") throw new HttpError(422, "Only Character Media Studio assets can be sent.");
+    const thread = checked(
+      await db.from("conversations").select("*").eq("id", conversationId).eq("owner_id", actor).single(),
+    );
+    let allowed = thread.character_id === asset.character_id;
+    if (thread.group_id) {
+      const member = checked(
+        await db.from("group_members").select("character_id").eq("group_id", thread.group_id).eq("character_id", asset.character_id).limit(1),
+      );
+      allowed = allowed || member.length > 0;
+    }
+    if (!allowed) throw new HttpError(403, "This character is not part of the selected conversation.");
+    const caption = typeof b.caption === "string" ? b.caption.trim().slice(0, 1000) : "";
+    const message = checked(
+      await service.from("messages").insert({
+        owner_id: actor,
+        conversation_id: thread.id,
+        character_id: asset.character_id,
+        role: "assistant",
+        body: caption || "I wanted to share this with you ✨",
+        attachment: asset.path,
+        attachment_bucket: asset.bucket,
+        mime: asset.mime,
+      }).select("id").single(),
+    );
+    return { messageId: message.id };
+  }
   if (b.action === "generate") return generate(ctx, id(b.id));
   if (b.action === "test-provider") {
     return {
