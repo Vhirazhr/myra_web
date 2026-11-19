@@ -444,6 +444,8 @@ const aiProviderTemplates = [
     enabled: true,
     temperature: 0.7,
     supports_vision: true,
+    base_url: "",
+    secret_name: "",
   },
   {
     name: "OpenRouter",
@@ -453,6 +455,8 @@ const aiProviderTemplates = [
     enabled: false,
     temperature: 0.7,
     supports_vision: false,
+    base_url: "",
+    secret_name: "",
   },
   {
     name: "OpenAI GPT",
@@ -462,6 +466,8 @@ const aiProviderTemplates = [
     enabled: false,
     temperature: 0.7,
     supports_vision: false,
+    base_url: "",
+    secret_name: "",
   },
   {
     name: "Anthropic Claude",
@@ -471,6 +477,8 @@ const aiProviderTemplates = [
     enabled: false,
     temperature: 0.7,
     supports_vision: false,
+    base_url: "",
+    secret_name: "",
   },
   {
     name: "DeepSeek",
