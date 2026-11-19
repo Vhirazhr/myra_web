@@ -261,6 +261,11 @@ test("4–5 · Gemini inference, persisted memory, scoped retrieval and group re
   const thread = ok(
     await client.from("conversations").select("id").eq("name", "Memory test").single(),
   ).data!.id;
+  await expect.poll(async () => {
+    const r = await client.from("memories").select("id").not("source_id", "is", null);
+    if (r.error) throw r.error;
+    return r.data?.length || 0;
+  }, { timeout: 30000 }).toBeGreaterThan(0);
   const memories = ok(await client.from("memories").select("*").not("source_id", "is", null)).data!;
   expect(memories.length).toBeGreaterThan(0);
   const later = ok(
