@@ -518,8 +518,16 @@ export function MultiAIProviders() {
   const providers = useRows("providers");
   const addTemplates = useMutation({
     mutationFn: async () => {
-      const existing = new Set((providers.data || []).map((provider) => String(provider.name).toLowerCase()));
-      const missing = aiProviderTemplates.filter((provider) => !existing.has(provider.name.toLowerCase()));
+      const existingNames = new Set((providers.data || []).map((provider) => String(provider.name).toLowerCase()));
+      const existingNativeAdapters = new Set(
+        (providers.data || []).filter((provider) => provider.adapter !== "compatible")
+          .map((provider) => String(provider.adapter)),
+      );
+      const missing = aiProviderTemplates.filter((provider) =>
+        provider.adapter === "compatible"
+          ? !existingNames.has(provider.name.toLowerCase())
+          : !existingNativeAdapters.has(provider.adapter)
+      );
       for (const provider of missing) await save("providers", provider);
       return missing.length;
     },
