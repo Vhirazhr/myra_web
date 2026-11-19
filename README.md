@@ -17,19 +17,20 @@ values ('<UUID akun dari Authentication>'::uuid)
 on conflict do nothing;
 ```
 
-5. Tambahkan kredensial layanan ke **Edge Function Secrets** sesuai tabel di bawah. Buka **AI Providers**, buat provider, masukkan model ID yang tersedia untuk akun tersebut, lalu pilih **Test connection**. Prioritas terkecil dipanggil lebih dahulu. Biaya berupa estimasi berdasarkan harga per sejuta token yang diisi admin.
+5. Buat satu API key di [Google AI Studio](https://aistudio.google.com/apikey), lalu simpan hanya sebagai Supabase Edge Function Secret:
+   ```sh
+   pnpm exec supabase secrets set GEMINI_API_KEY=YOUR_GOOGLE_AI_STUDIO_KEY
+   ```
+   MYRA memakai `gemini-3.8-flash` untuk chat dan memori, `gemini-3.8-live` untuk voice call, serta `gemini-3.8-flash-lite-tts` untuk voice note. Model default dapat diubah melalui `GEMINI_CHAT_MODEL`, `GEMINI_LIVE_MODEL`, dan `GEMINI_TTS_MODEL`. Buka **Google AI Engine** dan pilih **Test Gemini connection**.
 6. Hubungkan branch yang sudah direview ke Vercel dengan preset Vite, perintah `pnpm build`, dan direktori output `dist`. Setelah env frontend disimpan, buat deployment baru. Buka domain admin dan masuk memakai akun yang diprovisikan.
 
 | Fitur | Secret di server |
 | --- | --- |
-| OpenRouter | `OPENROUTER_API_KEY` |
-| OpenAI chat | `OPENAI_API_KEY` |
-| Provider kompatibel OpenAI | `AI_COMPATIBLE_BASE_URL` dengan akhiran `/v1` dan `AI_COMPATIBLE_API_KEY` |
-| Voice note, transkripsi, WebRTC | `OPENAI_VOICE_API_KEY`. Opsional `TTS_MODEL` dan `REALTIME_MODEL` |
+| Gemini chat, memory, proactive, TTS, transcription, Live token | `GEMINI_API_KEY` (satu key) |
 | Pekerja terjadwal | `MYRA_WORKER_TOKEN` acak, minimal 32 karakter |
 | Push Android | `FIREBASE_SERVICE_ACCOUNT_JSON` dengan akses kirim FCM ke proyek aplikasi |
 
-Gunakan nama secret di atas persis seperti tertulis. Hanya URL dan publishable key memakai prefiks `VITE_`. Supabase Cloud menyediakan URL internal dan key server untuk Edge Functions. Simpan service-role key hanya di lingkungan server atau runner pengujian lokal.
+Jangan gunakan prefiks `VITE_` untuk Gemini API key. Kunci hanya disimpan di Edge Function Secrets; browser menerima token Live berumur pendek, bukan API key. Foto dan video karakter tetap memakai Google Flow melalui alur manual: salin prompt, buat media di Flow dengan akun Google AI Plus, unduh, lalu impor melalui Character Media Studio.
 
 ## Jalankan dan uji
 
@@ -46,7 +47,7 @@ Lihat [panduan pengujian](docs/testing.md) untuk menjalankan Playwright pada Sup
 ## Alur utama
 
 - **Character Studio** menyimpan profil, portrait, personality, gaya bicara, voice, dan latar. Profil bisa diduplikasi, diarsipkan, dicari, atau dihapus. Universe dan grup menyimpan roster melalui transaksi database.
-- **Conversations** menyimpan pesan pengguna sebelum memanggil model. Jika provider gagal, pesan tetap tersedia. Tombol **Request response** mencoba kembali turn yang sama. Grup mendukung mode, mention, balasan antarkarakter, reply, reaksi, dan lampiran privat. Perubahan dari klien lain masuk lewat Realtime.
+- **Conversations** menyimpan pesan pengguna sebelum memanggil model. Jika Gemini gagal atau kuota habis, pesan tetap tersedia. Tombol **Request response** mencoba kembali turn yang sama. Grup mendukung mode, mention, balasan antarkarakter, reply, reaksi, dan lampiran privat. Perubahan dari klien lain masuk lewat Realtime.
 - **Memory Engine** mengelola tujuh scope. Model menerima riwayat terbatas dan hasil retrieval yang sesuai. Pengguna dapat menyimpan kutipan secara eksplisit, membatasi memory pada percakapan, melewati ekstraksi, dan mengedit atau menghapus memory.
 - **Story Studio** mendukung draft dan waktu tayang, media privat, group/universe feed, like, view, reaction, reply, dan arsip. **Social Graph** membaca relasi nyata dan menyimpan perubahan trust dalam riwayat.
 - **Life Simulation** menjalankan jadwal dan event melalui worker, mencatat mood dan diary, serta dapat menambah interaksi dan milestone. **Proactive Messaging** menghormati quiet hours dan interval. Android push menggunakan FCM ketika ada konfigurasi dan perangkat terdaftar.
