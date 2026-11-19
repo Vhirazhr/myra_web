@@ -67,3 +67,11 @@ Google Flow does not expose the user's Google AI Plus subscription as a callable
 ## Chat latency and memory processing
 
 Conversation responses use Gemini's SSE streaming endpoint and are persisted incrementally to the assistant message so Supabase Realtime can display partial text. The prompt context and output budget are capped to reduce latency. Memory extraction is queued after the reply is committed; it does not delay the chat response. The Edge Function attempts a background drain, and the scheduled worker retries transient failures with backoff. Explicit `remember` requests are saved without a second model call.
+
+## Gemini primary and text failover policy
+
+Gemini remains the primary provider for chat, image/video workflows, and voice. For conversation requests only, transient Gemini overload, gateway, service-unavailable, and timeout failures are retried once before the request is reported as unavailable. Quota/rate-limit responses are only retried when the upstream message indicates a transient rate-limit or overload condition; invalid credentials, permission errors, and malformed requests are not retried.
+
+GPT is reserved as a text-only fallback. It must not receive image/video generation or voice requests. ChatGPT Plus plan usage is not currently wired into this remote-hosted, private MYRA deployment: OpenAI's published token-sharing path is for open-source and locally hosted tools, while remotely hosted apps must request access through the official partner interest process. Do not use browser cookies, copied ChatGPT sessions, or account passwords as a substitute. Enable GPT fallback only after OpenAI grants the required access and the official OAuth/token-sharing flow is implemented.
+
+Mobile and web clients continue to use the same Supabase conversations and messages; the AI provider is selected server-side and does not create separate chat histories.
