@@ -5,86 +5,136 @@ type Turn = {
     | string
     | ({ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } })[];
 };
-const adapters: Record<string, { url: () => string; key: string }> = {
-  openai: { url: () => "https://api.openai.com/v1", key: "OPENAI_API_KEY" },
-  openrouter: { url: () => "https://openrouter.ai/api/v1", key: "OPENROUTER_API_KEY" },
-  compatible: { url: () => required("AI_COMPATIBLE_BASE_URL"), key: "AI_COMPATIBLE_API_KEY" },
-};
+function encodeBase64(bytes: Uint8Array) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+async function geminiParts(content: Turn["content"]) {
+  if (typeof content === "string") return [{ text: content }];
+  const parts: Record<string, unknown>[] = [];
+  for (const item of content) {
+    if (item.type === "text") {
+      parts.push({ text: item.text });
+      continue;
+    }
+    const response = await fetch(item.image_url.url, { signal: AbortSignal.timeout(20000) });
+    if (!response.ok) throw new Error("Could not load the attached image for Gemini");
+    const mimeType = (response.headers.get("content-type") || "image/jpeg").split(";")[0];
+    if (!mimeType.startsWith("image/")) throw new Error("Unsupported image attachment");
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength > 12 * 1024 * 1024) {
+      throw new Error("Image attachments for AI analysis must be 12 MB or smaller");
+    }
+    parts.push({ inlineData: { mimeType, data: encodeBase64(bytes) } });
+  }
+  return parts;
+}
 export async function completion(
   ctx: Context,
   operation: string,
   messages: Turn[],
-  providerId?: string,
 ) {
-  let q = ctx.db.from("providers").select("*").eq("owner_id", ctx.actor).order("priority").order(
-    "id",
-  );
-  q = providerId ? q.eq("id", providerId) : q.eq("enabled", true);
-  const providers = checked(await q.limit(8));
-  if (!providers.length) throw new Error("Configure an AI provider and model first");
-  const failures: string[] = [];
-  for (const p of providers) {
-    let content = "", input: number | null = null, output: number | null = null, err = "";
-    try {
-      const a = adapters[p.adapter];
-      const configuredTemperature = Number(p.temperature ?? 0.7);
-      const temperature = operation === "conversation"
-        ? Math.max(configuredTemperature, 0.85)
-        : operation === "initiative"
-        ? Math.max(configuredTemperature, 0.88)
-        : configuredTemperature;
-      const maxTokens = operation === "conversation"
-        ? 1000
-        : operation === "initiative"
-        ? 240
-        : operation === "summary"
-        ? 700
-        : operation === "memory extraction"
-        ? 120
-        : 500;
-      const res = await fetch(a.url().replace(/\/$/, "") + "/chat/completions", {
+  const apiKey = required("GEMINI_API_KEY");
+  const model = Deno.env.get("GEMINI_CHAT_MODEL") || "gemini-3.8-flash";
+  const temperature = operation === "conversation"
+    ? 0.9
+    : operation === "initiative"
+    ? 0.92
+    : operation === "memory extraction"
+    ? 0.2
+    : 0.55;
+  const maxOutputTokens = operation === "conversation"
+    ? 1100
+    : operation === "initiative"
+    ? 260
+    : operation === "summary"
+    ? 800
+    : operation === "memory extraction"
+    ? 140
+    : 500;
+  const systemInstruction = messages
+    .filter((message) => message.role === "system")
+    .map((message) => typeof message.content === "string"
+      ? message.content
+      : message.content.filter((part) => part.type === "text").map((part) => part.text).join("\n"))
+    .filter(Boolean)
+    .join("\n\n");
+  const contents: { role: "user" | "model"; parts: Record<string, unknown>[] }[] = [];
+  for (const message of messages) {
+    if (message.role === "system") continue;
+    const role = message.role === "assistant" ? "model" : "user";
+    const parts = await geminiParts(message.content);
+    if (!parts.length) continue;
+    const previous = contents[contents.length - 1];
+    if (previous?.role === role) previous.parts.push(...parts);
+    else contents.push({ role, parts });
+  }
+  if (!contents.length) throw new Error("Gemini request has no conversation content");
+  let answer = "";
+  let inputTokens: number | null = null;
+  let outputTokens: number | null = null;
+  let failure = "";
+  try {
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/" +
+        encodeURIComponent(model) + ":generateContent",
+      {
         method: "POST",
-        headers: { Authorization: "Bearer " + required(a.key), "Content-Type": "application/json" },
+        headers: {
+          "x-goog-api-key": apiKey,
+          "Content-Type": "application/json",
+        },
         signal: AbortSignal.timeout(60000),
         body: JSON.stringify({
-          model: p.model,
-          messages,
-          temperature,
-          max_tokens: maxTokens,
+          systemInstruction: systemInstruction
+            ? { parts: [{ text: systemInstruction.slice(0, 36000) }] }
+            : undefined,
+          contents,
+          generationConfig: {
+            temperature,
+            maxOutputTokens,
+            thinkingConfig: { thinkingLevel: "LOW" },
+          },
         }),
-      });
-      if (!res.ok) throw new Error("Provider HTTP " + res.status);
-      const data = await res.json();
-      content = data.choices?.[0]?.message?.content?.trim() || "";
-      if (!content) throw new Error("Provider returned no text");
-      input = data.usage?.prompt_tokens ?? null;
-      output = data.usage?.completion_tokens ?? null;
-    } catch (e) {
-      err = e instanceof SyntaxError
-        ? "Invalid provider JSON"
-        : e instanceof Error
-        ? e.message
-        : "Provider unavailable";
-    }
-    checked(
-      await ctx.service.from("usage_logs").insert({
-        owner_id: ctx.actor,
-        operation,
-        provider_id: p.id,
-        model: p.model,
-        input_tokens: input,
-        output_tokens: output,
-        cost: input !== null && output !== null &&
-            (Number(p.input_price) > 0 || Number(p.output_price) > 0)
-          ? (input * p.input_price + output * p.output_price) / 1e6
-          : null,
-        error: err,
-      }),
+      },
     );
-    if (!err) return content;
-    failures.push(p.name + " — " + err);
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(
+        payload.error?.message || "Gemini API returned HTTP " + response.status,
+      );
+    }
+    answer = (payload.candidates?.[0]?.content?.parts || [])
+      .map((part: { text?: string }) => part.text || "")
+      .join("")
+      .trim();
+    if (!answer) {
+      const reason = payload.candidates?.[0]?.finishReason;
+      throw new Error(reason ? "Gemini returned no text (" + reason + ")" : "Gemini returned no text");
+    }
+    inputTokens = payload.usageMetadata?.promptTokenCount ?? null;
+    outputTokens = payload.usageMetadata?.candidatesTokenCount ?? null;
+  } catch (error) {
+    failure = error instanceof Error ? error.message : "Gemini API unavailable";
   }
-  throw new Error(failures.join(" · "));
+  checked(
+    await ctx.service.from("usage_logs").insert({
+      owner_id: ctx.actor,
+      operation,
+      provider_id: null,
+      model,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      cost: null,
+      error: failure,
+    }),
+  );
+  if (failure) throw new Error(failure);
+  return answer;
 }
 export async function generate(ctx: Context, sourceId: string) {
   const { db, actor, service } = ctx;
