@@ -226,7 +226,7 @@ export const handler = endpoint(async (req) => {
     if (blob.size > 20 * 1024 * 1024) {
       throw new HttpError(413, "Audio files over 20 MB cannot be transcribed inline");
     }
-    const model = Deno.env.get("GEMINI_CHAT_MODEL") || "gemini-3.8-flash";
+    const model = Deno.env.get("GEMINI_CHAT_MODEL") || "gemini-3.6-flash";
     const generated = await geminiRequest("models/" + encodeURIComponent(model) + ":generateContent", {
       contents: [{
         role: "user",
