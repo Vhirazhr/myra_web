@@ -4,7 +4,6 @@ export const nav = [
     section: "Overview",
     items: [
       ["Dashboard", "grid", "dashboard"],
-      ["Analytics", "chart", "analytics"],
       ["AI Usage & Costs", "spark", "usage"],
     ],
   },
@@ -74,18 +73,16 @@ export const nav = [
       ["Conversations", "message", "chat"],
       ["Notification Manager", "bell", "notifications"],
       ["Proactive Messaging", "message", "proactive"],
-      ["Voice Call Configuration", "phone", "calls"],
+      ["Voice Calls", "phone", "calls"],
       ["Voice Note Configuration", "mic", "voice-notes"],
     ],
   },
   {
     section: "System",
     items: [
-      ["Conversation Logs", "message", "logs"],
-      ["Storage Manager", "database", "storage"],
       ["Backup & Restore", "database", "backup"],
       ["Security", "shield", "security"],
-      ["Environment Settings", "settings", "environment"],
+      ["General Settings", "settings", "environment"],
     ],
   },
 ] as const;
