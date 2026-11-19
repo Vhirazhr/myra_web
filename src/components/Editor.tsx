@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { z } from "zod";
 import { Button, Card, Badge, Icon } from "./ui";
@@ -55,11 +55,16 @@ export function FilePicker({
   const saved = useSigned(bucket, existingPath);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
-  const previewUrl = useMemo(() => file ? URL.createObjectURL(file) : "", [file]);
-
-  useEffect(() => () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl);
-  }, [previewUrl]);
+  const [previewUrl, setPreviewUrl] = useState("");
+  useEffect(() => {
+    if (!file) {
+      setPreviewUrl("");
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
 
   const maxSizeMb = bucket === "character-avatars" ? 10 : 50;
   const mime = file?.type || existingMime;
