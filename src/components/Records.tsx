@@ -242,10 +242,8 @@ export function Records({
                   {r.portrait && <Media bucket="character-avatars" path={r.portrait} />}
 
                   <div>
-                    <button
-                      className="record-title"
-                      onClick={() => (onOpen ? onOpen(r) : inspect(r))}
-                    >
+                    <button type="button" className="record-title"
+                      onClick={() => (onOpen ? onOpen(r) : inspect(r))}>
                       {String(spec.label ? r[spec.label] : displayName(r))}
                     </button>
                     <small>
@@ -287,8 +285,8 @@ export function Records({
                   {actions?.(r)}
                   {spec.table === "characters" && (
                     <>
-                      <button
-                        title="Duplicate"
+                      <button type="button" title={"Duplicate " + displayName(r)}
+                        aria-label={"Duplicate " + displayName(r)} disabled={mutate.isPending}
                         onClick={() =>
                           mutate.mutate(async () => {
                             const fields = Object.fromEntries(
@@ -304,8 +302,9 @@ export function Records({
                       >
                         <Icon name="copy" />
                       </button>
-                      <button
-                        title="Archive"
+                      <button type="button" title={"Archive " + displayName(r)}
+                        aria-label={"Archive " + displayName(r)}
+                        disabled={mutate.isPending || r.status === "archived"}
                         onClick={() =>
                           mutate.mutate(() => save("characters", { status: "archived" }, r.id))
                         }
@@ -316,10 +315,12 @@ export function Records({
                   )}
                   {!spec.readOnly && (
                     <>
-                      <button title={"Edit " + spec.singular} onClick={() => edit(r)}>
+                      <button type="button" title={"Edit " + spec.singular}
+                        aria-label={"Edit " + displayName(r)} onClick={() => edit(r)}>
                         <Icon name="edit" />
                       </button>
-                      <button title={"Delete " + spec.singular} onClick={() => del(r)}>
+                      <button type="button" title={"Delete " + spec.singular}
+                        aria-label={"Delete " + displayName(r)} onClick={() => del(r)}>
                         <Icon name="trash" />
                       </button>
                     </>
