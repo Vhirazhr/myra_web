@@ -68,7 +68,8 @@ async function submit(p: Page, name: string) {
 async function character(p: Page, name: string) {
   await p.goto("/character-new");
   await p.getByLabel("Character name").fill(name);
-  await p.getByRole("button", { name: "8 Scenario" }).click();
+  for (let step = 0; step < 7; step++)
+    await p.getByRole("button", { name: "Continue", exact: true }).click();
   await p.getByRole("button", { name: "Save character", exact: true }).click();
   await expect(p.getByRole("button", { name, exact: true })).toBeVisible();
 }
@@ -632,4 +633,38 @@ test("responsive shell keeps navigation, search and page motion usable", async (
   await expect(page.getByRole("button", { name: "3 Personality" })).toBeDisabled();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("heading", { name: "All Characters" })).toBeVisible();
+});
+
+
+test("brand logo and image fields use the MYRA visual system", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/character-new");
+  await login(page, email);
+  await expect(page.getByRole("heading", { name: "Create Character" })).toBeVisible();
+
+  const logo = page.locator(".side-brand .brand-mark");
+  await expect(logo).toBeVisible();
+  const logoBox = await logo.boundingBox();
+  expect(logoBox?.width).toBeGreaterThanOrEqual(48);
+  expect(logoBox?.height).toBeGreaterThanOrEqual(48);
+  await expect(page.locator(".side-brand .brand-mark img")).toHaveAttribute("src", "/myra-logo.png");
+
+  await expect(page.getByText("Portrait", { exact: true })).toBeVisible();
+  await expect(page.locator(".file-picker-dropzone")).toBeVisible();
+  const input = page.locator(".file-picker-input").first();
+  await expect(input).toBeAttached();
+  await input.setInputFiles({
+    name: "myra-portrait.png",
+    mimeType: "image/png",
+    buffer: Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p1sAAAAASUVORK5CYII=",
+      "base64",
+    ),
+  });
+  await expect(page.getByText("myra-portrait.png")).toBeVisible();
+  await expect(page.locator(".file-picker-preview img")).toBeVisible();
+
+  await page.goto("/universe-new");
+  await expect(page.getByText("World cover", { exact: true })).toBeVisible();
+  await expect(page.locator(".file-picker-dropzone")).toBeVisible();
 });

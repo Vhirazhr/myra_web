@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { z } from "zod";
-import { Button, Card, Badge } from "./ui";
+import { Button, Card, Badge, Icon } from "./ui";
 import type { Field, Spec, Row, Values } from "../types/workspace";
 import { displayName } from "../services/catalog";
 import { db } from "../lib/supabase";
@@ -13,6 +13,7 @@ import {
   save,
   upload,
   useRows,
+  useSigned,
 } from "../services/workspace";
 
 export const traitNames = [
@@ -28,6 +29,145 @@ export const traitNames = [
   "Extroverted",
   "Confident",
 ];
+
+export type FilePickerProps = {
+  label: string;
+  accept: string;
+  bucket: string;
+  file: File | null;
+  existingPath?: string;
+  existingMime?: string;
+  hint?: string;
+  onChange: (file: File | null) => void;
+};
+
+export function FilePicker({
+  label,
+  accept,
+  bucket,
+  file,
+  existingPath,
+  existingMime = "",
+  hint,
+  onChange,
+}: FilePickerProps) {
+  const inputId = useId();
+  const saved = useSigned(bucket, existingPath);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState("");
+  const previewUrl = useMemo(() => file ? URL.createObjectURL(file) : "", [file]);
+
+  useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
+  const maxSizeMb = bucket === "character-avatars" ? 10 : 50;
+  const mime = file?.type || existingMime;
+  const isVideo = mime.startsWith("video/");
+  const isImage = !isVideo && (mime.startsWith("image/") || accept.toLowerCase().includes("image/"));
+  const preview = previewUrl || saved.data || "";
+
+  function choose(candidate?: File) {
+    if (!candidate) return;
+    const rules = accept.split(",").map((rule) => rule.trim().toLowerCase()).filter(Boolean);
+    const valid = !rules.length || rules.some((rule) =>
+      rule.endsWith("/*")
+        ? candidate.type.toLowerCase().startsWith(rule.slice(0, -1))
+        : rule.startsWith(".")
+          ? candidate.name.toLowerCase().endsWith(rule)
+          : candidate.type.toLowerCase() === rule,
+    );
+    if (!valid) {
+      setError("This file type is not supported. Choose a supported image or video.");
+      return;
+    }
+    if (candidate.size > maxSizeMb * 1024 * 1024) {
+      setError(`File must be ${maxSizeMb} MB or smaller.`);
+      return;
+    }
+    setError("");
+    onChange(candidate);
+  }
+
+  return (
+    <div className="file-field span2">
+      <span className="file-field-label">{label}</span>
+      <div className={`file-picker ${dragging ? "is-dragging" : ""}`}>
+        <input
+          id={inputId}
+          className="file-picker-input"
+          type="file"
+          accept={accept}
+          aria-label={label}
+          aria-describedby={inputId + "-hint"}
+          onChange={(event) => {
+            choose(event.currentTarget.files?.[0]);
+            event.currentTarget.value = "";
+          }}
+        />
+        <label
+          htmlFor={inputId}
+          className="file-picker-dropzone"
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragging(false);
+            choose(event.dataTransfer.files?.[0]);
+          }}
+        >
+          <span className="file-picker-preview">
+            {preview && isImage ? (
+              <img src={preview} alt={label + " preview"} />
+            ) : preview && isVideo ? (
+              <video src={preview} muted playsInline preload="metadata" />
+            ) : (
+              <Icon name="image" size={27} />
+            )}
+          </span>
+          <span className="file-picker-copy">
+            <strong>{file?.name || (existingPath ? "Current file saved" : "No file selected")}</strong>
+            <small>
+              {file
+                ? `${(file.size / 1024 / 1024).toFixed(2)} MB · ${file.type || "File"}`
+                : existingPath
+                  ? "Your saved file is kept. Choose another file to replace it."
+                  : "Drag and drop a file here, or browse your device."}
+            </small>
+          </span>
+          <span className="file-picker-action">Browse files</span>
+        </label>
+        <div className="file-picker-footer">
+          <small id={inputId + "-hint"}>
+            {hint || (accept.toLowerCase().includes("video")
+              ? "PNG, JPG, WEBP, MP4 or WEBM"
+              : "PNG, JPG or WEBP") + ` · Max ${maxSizeMb} MB`}
+          </small>
+          {file && (
+            <button
+              type="button"
+              className="file-picker-remove"
+              onClick={() => {
+                onChange(null);
+                setError("");
+              }}
+            >
+              Remove selection
+            </button>
+          )}
+        </div>
+        {error && <p className="form-error" role="alert">{error}</p>}
+        {saved.error && !file && (
+          <p className="form-error" role="alert">Could not load the saved preview: {errorText(saved.error)}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function dateValue(date: Date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
@@ -200,6 +340,26 @@ export function Editor({
     if (f.when && current[f.when[0]] !== f.when[1]) return null;
     const value = current[f.key],
       change = (v: any) => update(f.key, v);
+    if (f.type === "file") {
+      const existingPath = row?.[f.key] ? String(row[f.key]) : undefined;
+      return (
+        <FilePicker
+          key={f.key}
+          label={f.label}
+          accept={f.accept || "image/*"}
+          bucket={f.bucket!}
+          file={files[f.key] || null}
+          existingPath={existingPath}
+          existingMime={f.key === "media" ? String(row?.mime || "") : ""}
+          onChange={(selected) => setFiles((currentFiles) => {
+            const next = { ...currentFiles };
+            if (selected) next[f.key] = selected;
+            else delete next[f.key];
+            return next;
+          })}
+        />
+      );
+    }
     if (f.type === "traits")
       return (
         <div className="trait-editor span2" key={f.key}>
@@ -226,16 +386,6 @@ export function Editor({
         {f.label}
         {f.type === "ref" || f.type === "multi" ? (
           <Choices field={f} value={value ?? ""} change={change} />
-        ) : f.type === "file" ? (
-          <>
-            <input type="file" accept={f.accept} onChange={(e) => {
-              const selected = e.target.files?.[0];
-              if (selected) setFiles((v) => ({ ...v, [f.key]: selected }));
-            }} />
-            {row?.[f.key] && <small className="field-hint">
-              An existing file is saved. Choose another file only if you want to replace it.
-            </small>}
-          </>
         ) : f.type === "area" ? (
           <textarea
             value={String(value ?? "")}

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Badge, Button, Card } from "../components/ui";
+import { FilePicker } from "../components/Editor";
 import { Heading, Media } from "../components/Records";
 import {
   call,
@@ -259,21 +260,14 @@ export function CharacterMediaStudio() {
             </div>
             <Badge tone="green">Private storage</Badge>
           </div>
-          <label>
-            File from Google Flow
-            <input
-              key={file?.name || "empty"}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
-              onChange={(event) => setFile(event.target.files?.[0] || null)}
-            />
-          </label>
-          {file && (
-            <div className="media-file-choice">
-              <span>{file.name}</span>
-              <small>{(file.size / 1024 / 1024).toFixed(2)} MB · {file.type}</small>
-            </div>
-          )}
+          <FilePicker
+            label="File from Google Flow"
+            bucket="stories"
+            accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
+            file={file}
+            onChange={setFile}
+            hint="PNG, JPG, WEBP, GIF, MP4 or WEBM · Max 50 MB"
+          />
           <label>
             Description / scene
             <input

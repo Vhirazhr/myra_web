@@ -98,27 +98,31 @@
   width: 76px;
 }
 .side-brand {
-  height: 72px;
-  padding: 0 16px 0 20px;
+  height: 86px;
+  padding: 0 14px 0 18px;
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 13px;
   border-bottom: 1px solid var(--line);
   flex: none;
 }
 .brand-mark {
-  width: 34px;
-  height: 34px;
-  background: #080608;
-  border-radius: 10px;
-  box-shadow: 0 0 24px #f3a9c433;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border-radius: 13px;
+  box-shadow: 0 0 26px #f3a9c433;
   flex: none;
   overflow: hidden;
 }
 .brand-mark img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  padding: 2px;
+  object-fit: contain;
+  object-position: center;
 }
 .side-brand div {
   line-height: 1.1;
@@ -126,9 +130,9 @@
   white-space: nowrap;
 }
 .side-brand .brand-name {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.18em;
 }
 .side-brand b {
   font-size: 12px;
@@ -148,15 +152,29 @@
   transform: rotate(180deg);
   padding: 5px;
 }
+.collapsed .side-brand {
+  justify-content: center;
+  padding: 0 8px;
+}
+.collapsed .brand-mark {
+  width: 48px;
+  height: 48px;
+}
 .collapsed .side-brand > button {
   position: absolute;
-  left: 58px;
+  left: auto;
+  right: 5px;
+  top: 5px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 50%;
   transform: none;
   padding: 2px;
-  top: 26px;
+  z-index: 2;
 }
 .sidebar nav {
   overflow-y: auto;
@@ -2589,9 +2607,17 @@ input[type="range"]::-webkit-slider-thumb {
   top: 28px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   font-size: 10px;
   letter-spacing: 0.08em;
+}
+.login-brand .brand-mark {
+  width: 58px;
+  height: 58px;
+}
+.login-brand .brand-name {
+  font-size: 15px;
+  letter-spacing: 0.18em;
 }
 .login-brand .brand-name {
   font-size: 13px;
@@ -2613,9 +2639,9 @@ input[type="range"]::-webkit-slider-thumb {
   box-shadow: 0 30px 100px #000;
 }
 .login-symbol {
-  width: 54px;
-  height: 54px;
-  border-radius: 11px;
+  width: 68px;
+  height: 68px;
+  border-radius: 16px;
   background: #080608;
   box-shadow: 0 0 28px #f3a9c42b;
   overflow: hidden;
@@ -2624,7 +2650,9 @@ input[type="range"]::-webkit-slider-thumb {
 .login-symbol img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  padding: 2px;
+  object-fit: contain;
+  object-position: center;
 }
 .login-card h1 {
   font-size: 25px;
@@ -3200,5 +3228,156 @@ select[multiple] { min-height: 108px; padding: 8px; }
     animation-iteration-count: 1 !important;
     transition-duration: .01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Branded image picker — replaces browser-native file controls throughout MYRA */
+.file-field {
+  grid-column: span 2;
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  width: 100%;
+}
+.file-field-label {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+.file-picker {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+.file-picker-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.file-picker-dropzone {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  min-height: 112px;
+  padding: 14px;
+  border: 1px dashed var(--line2);
+  border-radius: 14px;
+  background: linear-gradient(145deg, var(--card2), var(--surface));
+  cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease,
+    box-shadow .18s ease, transform .18s ease;
+}
+.file-picker-dropzone:hover {
+  border-color: var(--pink);
+  background: linear-gradient(145deg, var(--pink-dim), var(--card));
+}
+.file-picker-input:focus-visible + .file-picker-dropzone {
+  outline: 2px solid var(--pink);
+  outline-offset: 3px;
+}
+.file-picker.is-dragging .file-picker-dropzone {
+  border-color: var(--pink);
+  background: var(--pink-dim);
+  box-shadow: 0 0 0 3px #f3a9c422;
+  transform: scale(.995);
+}
+.file-picker-preview {
+  width: 76px;
+  height: 76px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.file-picker-preview img,
+.file-picker-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.file-picker-copy {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.file-picker-copy strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.file-picker-copy small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.file-picker-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid #f3a9c455;
+  border-radius: 9px;
+  background: var(--pink-dim);
+  color: var(--pink);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.file-picker-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 0 2px;
+}
+.file-picker-footer small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.file-picker-remove {
+  min-height: 30px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+.file-picker-remove:hover { color: var(--pink); background: var(--surface); }
+@media (max-width: 600px) {
+  .file-field { grid-column: auto; }
+  .file-picker-dropzone {
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 10px;
+    min-height: 90px;
+    padding: 11px;
+  }
+  .file-picker-preview { width: 58px; height: 58px; }
+  .file-picker-action {
+    grid-column: 2;
+    justify-self: start;
+    min-height: 34px;
+    padding: 7px 10px;
   }
 }
