@@ -1,54 +1,102 @@
-# MYRA Google AI Engine
+# MYRA AI Provider Engine
 
-MYRA uses one Google AI Studio API key for server-side Gemini services. The key is stored only in Supabase Edge Function Secrets.
+MYRA uses a server-side multi-provider router for text generation. Gemini, OpenAI, Anthropic, OpenRouter, and approved OpenAI-compatible APIs can be configured as independent providers. Provider API keys are stored only in Supabase Edge Function Secrets.
 
-## Services
+## Routing responsibilities
 
-| Feature | Google service | Default model |
+| MYRA feature | Provider path |
+| --- | --- |
+| Chat, roleplay, summaries, story captions, memory extraction, proactive text | Automatic provider router |
+| Image understanding | Automatic router, but only providers whose model has **Accept image input** enabled |
+| Real-time voice calls | Gemini Live API |
+| Generated voice notes | Gemini Interactions API TTS |
+| Audio transcription | Gemini multimodal input |
+| Character photo/video generation | Google Flow manual workflow; the consumer subscription is not a callable MYRA API |
+
+Text routing is ordered by provider priority (lower number runs first). When a provider fails before producing any streamed text, MYRA tries the next enabled provider. If a stream has already emitted text, MYRA does not silently restart on another provider, preventing duplicated or contradictory replies. Invalid attachment errors (HTTP 413/422) are not retried against other providers.
+
+## Supported providers
+
+| Provider | Adapter | Server-side secret |
 | --- | --- | --- |
-| Chat, roleplay, memory extraction, summaries, proactive messages | Gemini Developer API | `gemini-3.6-flash` |
-| Real-time voice calls | Gemini Live API | `gemini-3.8-live` |
-| Generated voice notes | Gemini Interactions API TTS | `gemini-3.8-flash-tts` |
-| Audio transcription | Gemini multimodal input | `gemini-3.6-flash` |
-| Character photos and videos | Google Flow using the user's Google AI Plus account | Flow UI, not a callable MYRA API |
+| Google Gemini | `gemini` | `GEMINI_API_KEY` |
+| OpenRouter | `openrouter` | `OPENROUTER_API_KEY` |
+| OpenAI | `openai` | `OPENAI_API_KEY` |
+| Anthropic Claude | `anthropic` | `ANTHROPIC_API_KEY` |
+| DeepSeek | `compatible` | `DEEPSEEK_API_KEY` |
+| Groq | `compatible` | `GROQ_API_KEY` |
+| Mistral | `compatible` | `MISTRAL_API_KEY` |
+| xAI Grok | `compatible` | `XAI_API_KEY` |
 
-## Configure the single API key
+OpenAI-compatible adapters are restricted to approved HTTPS API hosts. The configured base URL may include the provider's API path, for example `https://api.groq.com/openai/v1`. The server does not accept arbitrary hosts or secret variable names. Supported additional secret names include `TOGETHER_API_KEY`, `FIREWORKS_API_KEY`, `CEREBRAS_API_KEY`, `PERPLEXITY_API_KEY`, `SAMBANOVA_API_KEY`, `NEBIUS_API_KEY`, `SILICONFLOW_API_KEY`, `MOONSHOT_API_KEY`, `MINIMAX_API_KEY`, `NOVITA_API_KEY`, and `HYPERBOLIC_API_KEY`.
+
+## Configure Gemini's specialized services
 
 1. Create a Gemini API key in [Google AI Studio](https://aistudio.google.com/apikey).
-2. From the project directory, link the Supabase project if needed and set the secret:
+2. Link the Supabase project if needed, then set the key from the project directory:
 
 ```cmd
 pnpm exec supabase link --project-ref splifnxylqaicneodkaj
 pnpm exec supabase secrets set GEMINI_API_KEY=YOUR_GOOGLE_AI_STUDIO_KEY
 ```
 
-3. Deploy both Edge Functions:
+3. Deploy the MYRA Edge Functions after the latest database migrations are applied:
 
 ```cmd
-pnpm exec supabase functions deploy myra --remote=splifnxylqaicneodkaj
-pnpm exec supabase functions deploy worker --remote=splifnxylqaicneodkaj
+pnpm exec supabase functions deploy myra --project-ref splifnxylqaicneodkaj
+pnpm exec supabase functions deploy worker --project-ref splifnxylqaicneodkaj
 ```
 
-4. Pull the latest frontend and build:
+Gemini defaults can be overridden with `GEMINI_CHAT_MODEL`, `GEMINI_LIVE_MODEL`, and `GEMINI_TTS_MODEL`. The current chat default is `gemini-3.6-flash`; Live and TTS use their dedicated model IDs.
+
+## Configure the other providers
+
+Create keys in the providers' official dashboards:
+
+- [OpenRouter](https://openrouter.ai/settings/keys)
+- [OpenAI](https://platform.openai.com/api-keys)
+- [Anthropic](https://console.anthropic.com/settings/keys)
+- [DeepSeek](https://platform.deepseek.com/api_keys)
+- [Groq](https://console.groq.com/keys)
+- [Mistral](https://console.mistral.ai/api-keys/)
+- [xAI](https://console.x.ai/)
+
+Set each key as a Supabase Edge Function Secret. Example:
 
 ```cmd
-git pull origin main
-pnpm install
-pnpm build
+pnpm exec supabase secrets set OPENROUTER_API_KEY=YOUR_OPENROUTER_KEY
+pnpm exec supabase secrets set OPENAI_API_KEY=YOUR_OPENAI_KEY
+pnpm exec supabase secrets set ANTHROPIC_API_KEY=YOUR_ANTHROPIC_KEY
+pnpm exec supabase secrets set DEEPSEEK_API_KEY=YOUR_DEEPSEEK_KEY
+pnpm exec supabase secrets set GROQ_API_KEY=YOUR_GROQ_KEY
+pnpm exec supabase secrets set MISTRAL_API_KEY=YOUR_MISTRAL_KEY
+pnpm exec supabase secrets set XAI_API_KEY=YOUR_XAI_KEY
 ```
 
-5. Open MYRA -> AI Engine -> Google AI Engine -> **Test Gemini connection**.
+Then open **MYRA → AI Engine → Multi-AI Providers** and select **Add missing provider templates**. The Gemini template is enabled first; the other templates start disabled. For each provider:
 
-The default model IDs can be overridden using server-side Edge Function secrets:
-- `GEMINI_CHAT_MODEL`
-- `GEMINI_LIVE_MODEL`
-- `GEMINI_TTS_MODEL`
+1. Edit `model` to a model ID available to your provider account. Templates intentionally use `YOUR_MODEL_ID` rather than assuming a model ID that may be retired or unavailable to your account.
+2. Confirm the provider's API key is set in Supabase Edge Function Secrets.
+3. Enable the provider and choose its priority (lower numbers are attempted first).
+4. If the model accepts images, enable **Model accepts image input**.
+5. Save the provider, then use **Test connection** on its row.
 
-The Gemini API key must never be added to `.env.local` as a `VITE_*` variable, committed to GitHub, or sent to the browser. MYRA creates a short-lived, single-use Gemini Live session token on the backend for each call.
+For DeepSeek, Groq, Mistral, and xAI, the template includes the official API base URL and secret variable name. Do not paste the API key into MYRA's provider form. The form stores only the secret variable name, not its value.
+
+## Usage and cost tracking
+
+MYRA records each provider attempt in `usage_logs`, including the provider/model, operation, token counts when supplied by the upstream API, error details, and estimated cost. Set the provider's input and output prices in USD per one million tokens to calculate estimated costs. Some providers or models do not return token usage on every response, so cost may be unavailable or approximate.
+
+## Privacy and quotas
+
+- Provider API keys are never sent to the browser and must not be committed to Git.
+- Each provider has its own rate limits, billing rules, model availability, and data-retention policy. Check the provider's terms before sending private conversations.
+- A successful connection test does not mean the provider offers unlimited free usage.
+- ChatGPT Plus subscriptions are not API credits. MYRA uses official provider API keys, not browser cookies, copied ChatGPT sessions, or account passwords.
 
 ## Google Flow media workflow
 
-Google Flow does not expose the user's Google AI Plus subscription as a callable API endpoint for MYRA. The Character Media Studio therefore keeps a supported manual bridge:
+Google Flow does not expose the user's Google AI Plus subscription as a callable API endpoint for MYRA. Character Media Studio therefore keeps a supported manual bridge:
 
 1. Select a character and media purpose in Character Media Studio.
 2. Copy the generated character-consistent prompt.
@@ -57,21 +105,17 @@ Google Flow does not expose the user's Google AI Plus subscription as a callable
 5. Download the result and import it into the character's private MYRA media library.
 6. MYRA can then share the imported media in a conversation.
 
-## Free-tier and privacy notes
+## Deployment and verification
 
-- Gemini API Free has model-specific request/token quotas, rate limits, and regional/eligibility restrictions. A successful API key does not guarantee unlimited free use.
-- Google documents that content sent through the unpaid Gemini API tier may be used to improve Google products. Avoid sending highly sensitive personal conversations through the free tier.
-- Google AI Plus is a consumer subscription for Google's supported apps and does not automatically grant API quota or make Flow callable from MYRA.
-- Live API sessions and TTS are subject to their own model availability and quota limits. Check Google AI Studio's current usage dashboard if requests are rate-limited.
+After applying the migration and setting provider secrets:
 
-## Chat latency and memory processing
+```cmd
+pnpm exec supabase db push --linked
+pnpm exec supabase functions deploy myra --project-ref splifnxylqaicneodkaj
+pnpm exec supabase functions deploy worker --project-ref splifnxylqaicneodkaj
+pnpm install
+pnpm typecheck
+pnpm build
+```
 
-Conversation responses use Gemini's SSE streaming endpoint and are persisted incrementally to the assistant message so Supabase Realtime can display partial text. The prompt context and output budget are capped to reduce latency. Memory extraction is queued after the reply is committed; it does not delay the chat response. The Edge Function attempts a background drain, and the scheduled worker retries transient failures with backoff. Explicit `remember` requests are saved without a second model call.
-
-## Gemini primary and text failover policy
-
-Gemini remains the primary provider for chat, image/video workflows, and voice. For conversation requests only, transient Gemini overload, gateway, service-unavailable, and timeout failures are retried once before the request is reported as unavailable. Quota/rate-limit responses are only retried when the upstream message indicates a transient rate-limit or overload condition; invalid credentials, permission errors, and malformed requests are not retried.
-
-GPT is reserved as a text-only fallback. It must not receive image/video generation or voice requests. ChatGPT Plus plan usage is not currently wired into this remote-hosted, private MYRA deployment: OpenAI's published token-sharing path is for open-source and locally hosted tools, while remotely hosted apps must request access through the official partner interest process. Do not use browser cookies, copied ChatGPT sessions, or account passwords as a substitute. Enable GPT fallback only after OpenAI grants the required access and the official OAuth/token-sharing flow is implemented.
-
-Mobile and web clients continue to use the same Supabase conversations and messages; the AI provider is selected server-side and does not create separate chat histories.
+Open **Multi-AI Providers**, add the templates, configure model IDs and secrets, enable providers, and test each connection. The automated CI suite validates TypeScript, Edge Function types, the frontend build, provider ordering, fallback after rate limits, no duplicate retries after partial streaming, vision capability filtering, and secret-name validation. Live provider checks still require valid keys and model IDs configured in the user's Supabase project.

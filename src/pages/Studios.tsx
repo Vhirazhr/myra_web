@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button, Card, Modal, Badge, Icon, type IconName } from "../components/ui";
 import { Records, Media, Heading } from "../components/Records";
 import { Editor } from "../components/Editor";
-import { character, preferences, story, relationship } from "../services/catalog";
+import { character, preferences, story, relationship, aiProvider } from "../services/catalog";
 import {
   call,
   discardAsset,
@@ -435,6 +435,169 @@ export function Settings({ page, title }: { page: string; title: string }) {
     </div>
   );
 }
+const aiProviderTemplates = [
+  {
+    name: "Google Gemini",
+    adapter: "gemini",
+    model: "gemini-3.6-flash",
+    priority: 1,
+    enabled: true,
+    temperature: 0.7,
+    supports_vision: true,
+  },
+  {
+    name: "OpenRouter",
+    adapter: "openrouter",
+    model: "YOUR_MODEL_ID",
+    priority: 2,
+    enabled: false,
+    temperature: 0.7,
+    supports_vision: false,
+  },
+  {
+    name: "OpenAI GPT",
+    adapter: "openai",
+    model: "YOUR_MODEL_ID",
+    priority: 3,
+    enabled: false,
+    temperature: 0.7,
+    supports_vision: false,
+  },
+  {
+    name: "Anthropic Claude",
+    adapter: "anthropic",
+    model: "YOUR_MODEL_ID",
+    priority: 4,
+    enabled: false,
+    temperature: 0.7,
+    supports_vision: false,
+  },
+  {
+    name: "DeepSeek",
+    adapter: "compatible",
+    model: "YOUR_MODEL_ID",
+    priority: 5,
+    enabled: false,
+    temperature: 0.7,
+    base_url: "https://api.deepseek.com/v1",
+    secret_name: "DEEPSEEK_API_KEY",
+    supports_vision: false,
+  },
+  {
+    name: "Groq",
+    adapter: "compatible",
+    model: "YOUR_MODEL_ID",
+    priority: 6,
+    enabled: false,
+    temperature: 0.7,
+    base_url: "https://api.groq.com/openai/v1",
+    secret_name: "GROQ_API_KEY",
+    supports_vision: false,
+  },
+  {
+    name: "Mistral",
+    adapter: "compatible",
+    model: "YOUR_MODEL_ID",
+    priority: 7,
+    enabled: false,
+    temperature: 0.7,
+    base_url: "https://api.mistral.ai/v1",
+    secret_name: "MISTRAL_API_KEY",
+    supports_vision: false,
+  },
+  {
+    name: "xAI Grok",
+    adapter: "compatible",
+    model: "YOUR_MODEL_ID",
+    priority: 8,
+    enabled: false,
+    temperature: 0.7,
+    base_url: "https://api.x.ai/v1",
+    secret_name: "XAI_API_KEY",
+    supports_vision: false,
+  },
+];
+
+export function MultiAIProviders() {
+  const providers = useRows("providers");
+  const addTemplates = useMutation({
+    mutationFn: async () => {
+      const existingNames = new Set((providers.data || []).map((provider) => String(provider.name).toLowerCase()));
+      const existingNativeAdapters = new Set(
+        (providers.data || []).filter((provider) => provider.adapter !== "compatible")
+          .map((provider) => String(provider.adapter)),
+      );
+      const missing = aiProviderTemplates.filter((provider) =>
+        provider.adapter === "compatible"
+          ? !existingNames.has(provider.name.toLowerCase())
+          : !existingNativeAdapters.has(provider.adapter)
+      );
+      for (const provider of missing) await save("providers", provider);
+      return missing.length;
+    },
+    onSuccess: async () => {
+      await refresh();
+    },
+  });
+  const test = useMutation({
+    mutationFn: (providerId: string) => call("test-provider", { providerId }),
+    onSuccess: async () => {
+      await refresh();
+    },
+  });
+  const testedProvider = providers.data?.find((provider) => provider.id === test.variables);
+  return (
+    <Records
+      title="Multi-AI Providers"
+      section="AI Engine"
+      spec={aiProvider}
+      description="Automatic routing with provider priority, health checks, and usage tracking."
+      actions={(provider) => (
+        <Button secondary disabled={test.isPending} onClick={() => test.mutate(provider.id)}>
+          {test.isPending && test.variables === provider.id ? "Testing…" : "Test connection"}
+        </Button>
+      )}
+    >
+      <Card className="wizard-form">
+        <Badge tone="green">Automatic routing</Badge>
+        <h2>Eight provider templates</h2>
+        <p>
+          Add the recommended provider rows in one click. Gemini is enabled first; the other
+          providers start disabled until you add their server-side API keys and replace
+          YOUR_MODEL_ID with a model available to your account.
+        </p>
+        <div className="wizard-actions">
+          <Button
+            disabled={providers.isPending || addTemplates.isPending}
+            onClick={() => addTemplates.mutate()}
+          >
+            {addTemplates.isPending ? "Adding providers…" : "Add missing provider templates"}
+          </Button>
+        </div>
+        {addTemplates.data !== undefined && (
+          <p role="status">
+            {addTemplates.data
+              ? addTemplates.data + " provider templates added. Edit each model ID and enable providers after configuring their secrets."
+              : "All eight provider templates already exist."}
+          </p>
+        )}
+        {addTemplates.error && <p className="form-error" role="alert">{errorText(addTemplates.error)}</p>}
+        {test.data?.text && (
+          <p role="status">
+            {testedProvider?.name || "Provider"} connected successfully: {test.data.text}
+          </p>
+        )}
+        {test.error && <p className="form-error" role="alert">{errorText(test.error)}</p>}
+        <p className="media-help">
+          API key values belong in Supabase Edge Function Secrets, never in this form, browser
+          storage, frontend environment variables, or Git. The secret-name field only identifies
+          an existing server-side secret.
+        </p>
+      </Card>
+    </Records>
+  );
+}
+
 export function GoogleAIEngine() {
   const test = useMutation({
     mutationFn: () => call("test-google"),
@@ -444,7 +607,7 @@ export function GoogleAIEngine() {
       <Heading
         section="AI Engine"
         title="Google AI Engine"
-        description="One Google API key powers Gemini chat, memory extraction, proactive messages, voice notes, transcription, and Gemini Live calls."
+        description="Gemini powers MYRA voice calls, voice notes, and audio transcription. Text conversations and memory use the automatic Multi-AI Providers router."
       />
       <Card className="wizard-form">
         <Badge tone="green">Google ecosystem</Badge>
@@ -469,7 +632,7 @@ export function GoogleAIEngine() {
       </Card>
       <Card className="wizard-form">
         <h2>MYRA service routing</h2>
-        <div className="event-row"><strong>Chat, personality and memory</strong><span>Gemini API Free tier · gemini-3.6-flash</span></div>
+        <div className="event-row"><strong>Chat, summaries and memory</strong><span>Automatic Multi-AI Providers routing</span></div>
         <div className="event-row"><strong>Voice call</strong><span>Gemini Live · short-lived session tokens</span></div>
         <div className="event-row"><strong>Voice notes</strong><span>Gemini TTS · gemini-3.8-flash-tts</span></div>
         <div className="event-row"><strong>Audio transcription</strong><span>Gemini multimodal understanding</span></div>
@@ -525,7 +688,7 @@ export function Dashboard({ page }: { page: string }) {
       <div className="page">
         <Heading section="AI Engine" title="AI Usage & Costs"
           description="Usage recorded by MYRA over the last seven days. Cost is shown only when the usage logger has a price estimate.">
-          <Button secondary onClick={() => navigate("/google-ai")}>Google AI settings</Button>
+          <Button secondary onClick={() => navigate("/providers")}>Multi-AI Providers</Button>
         </Heading>
         {metrics.error && <p role="alert">{errorText(metrics.error)}</p>}
         <div className="metrics">
@@ -572,7 +735,7 @@ export function Dashboard({ page }: { page: string }) {
           <Card className="events-card usage-notes">
             <h3>About cost estimates</h3>
             <p>MYRA shows the cost estimate stored by its usage logger. A missing estimate does not mean the request was free.</p>
-            <p>Model pricing and quotas can change. Check Google AI Studio for the current limits on your account.</p>
+            <p>Model pricing and quotas can change. Check each configured provider's dashboard for current model prices, quotas, and account limits.</p>
             <Button secondary onClick={() => navigate("/google-ai")}>Open Google AI Engine</Button>
           </Card>
         </div>

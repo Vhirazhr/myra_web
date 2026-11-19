@@ -20,7 +20,7 @@ export const nav = [
     ["Story Studio", "play", "stories"], ["Story Scheduler", "calendar", "story-scheduler"], ["Media Library", "image", "media"], ["Character Media Studio", "image", "character-media"], ["Gallery Manager", "image", "gallery"],
   ]},
   { section: "AI Engine", items: [
-    ["Google AI Engine", "spark", "google-ai"], ["Memory Engine", "brain", "memory"], ["Language Engine", "globe", "language"], ["Response Behavior", "message", "response"], ["Context Management", "database", "context"],
+    ["Multi-AI Providers", "spark", "providers"], ["Google AI Engine", "spark", "google-ai"], ["Memory Engine", "brain", "memory"], ["Language Engine", "globe", "language"], ["Response Behavior", "message", "response"], ["Context Management", "database", "context"],
   ]},
   { section: "Communication", items: [
     ["Conversations", "message", "chat"], ["Notification Manager", "bell", "notifications"], ["Proactive Messaging", "message", "proactive"], ["Voice Calls", "phone", "calls"],

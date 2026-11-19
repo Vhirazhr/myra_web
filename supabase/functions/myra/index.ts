@@ -121,12 +121,22 @@ export const handler = endpoint(async (req) => {
     return { messageId: message.id };
   }
   if (b.action === "generate") return generate(ctx, id(b.id));
+  if (b.action === "test-provider") {
+    const providerId = id(b.providerId);
+    return {
+      providerId,
+      text: await completion(ctx, "connection test", [{
+        role: "user",
+        content: "Reply with a short MYRA provider connection confirmation.",
+      }], undefined, 0, { providerId }),
+    };
+  }
   if (b.action === "test-google") {
     return {
       text: await completion(ctx, "connection test", [{
         role: "user",
         content: "Reply with a short MYRA Google AI connection confirmation.",
-      }]),
+      }], undefined, 0, { adapter: "gemini" }),
     };
   }
   if (b.action === "simulation") {
