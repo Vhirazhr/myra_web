@@ -17,7 +17,7 @@ values ('<UUID akun dari Authentication>'::uuid)
 on conflict do nothing;
 ```
 
-5. Buat satu API key di [Google AI Studio](https://aistudio.google.com/apikey), lalu simpan hanya sebagai Supabase Edge Function Secret:
+5. Buat API key provider AI yang ingin digunakan. Gemini tetap tersedia sebagai provider khusus voice dan fallback. Untuk chat multi-provider, buka **AI Engine → Multi-AI Providers**, tambahkan model dan prioritas, lalu simpan nilai API key hanya sebagai Supabase Edge Function Secret (lihat [panduan Multi-AI](docs/google-ai-engine.md)). Buat satu API key di [Google AI Studio](https://aistudio.google.com/apikey), lalu simpan hanya sebagai Supabase Edge Function Secret:
    ```sh
    pnpm exec supabase secrets set GEMINI_API_KEY=YOUR_GOOGLE_AI_STUDIO_KEY
    ```
