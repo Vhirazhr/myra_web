@@ -60,6 +60,7 @@ export const nav = [
   {
     section: "AI Engine",
     items: [
+      ["Multi-AI Providers", "spark", "providers"],
       ["Google AI Engine", "spark", "google-ai"],
       ["Memory Engine", "brain", "memory"],
       ["Language Engine", "globe", "language"],
