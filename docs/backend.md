@@ -20,7 +20,7 @@ Semua tabel aplikasi di schema publik memakai RLS. Kunci asing komposit mengikat
 
 | Action di `myra` | `id` | Hasil |
 | --- | --- | --- |
-| `generate` | Pesan pengguna | Balasan personal atau grup dan memory persisten |
+| `generate` | Pesan pengguna | Balasan personal atau grup yang di-stream ke Realtime; ekstraksi memory masuk antrean background |
 | `test-google` | Tidak diperlukan | Uji koneksi Gemini memakai `GEMINI_API_KEY` server |
 | `summarize` | Percakapan | Ringkasan 32 pesan terbaru, disimpan pada scope percakapan |
 | `generate-story` | Karakter | Draft dengan caption dari model |
@@ -30,6 +30,12 @@ Semua tabel aplikasi di schema publik memakai RLS. Kunci asing komposit mengikat
 | `simulation` | Tidak diperlukan | Jumlah jadwal dan event yang dieksekusi untuk owner |
 
 Untuk panggilan suara, backend membuat token Gemini Live sekali pakai dengan masa mulai satu menit dan masa sesi 30 menit. Token dibatasi ke model dan instruksi karakter; API key Google tidak pernah dikirim ke browser. Browser membuka WebSocket Live API dengan token sementara, mengirim audio PCM mikrofon, dan memutar audio PCM yang diterima. Status call dicatat di tabel `calls`. Voice note memakai Gemini TTS, sedangkan transkripsi memakai Gemini multimodal input. Gambar dalam chat dapat dikirim ke Gemini melalui signed URL berumur pendek.
+
+### Streaming balasan dan antrean memory
+
+Balasan percakapan menggunakan Gemini `streamGenerateContent?alt=sse`. Edge Function membuat pesan assistant sementara, lalu memperbarui isi pesan secara bertahap agar klien Realtime dapat menampilkannya sebelum generasi selesai. Pesan sementara ditandai `is_streaming=true`; saat selesai, status diubah menjadi false dan notifikasi karakter dikirim satu kali. Jika generasi gagal, placeholder yang belum selesai dihapus.
+
+Memory tidak lagi diekstrak di jalur request chat. `finish_ai_reply` menyimpan balasan dan membuat record `memory_tasks` secara atomik. EdgeRuntime `waitUntil` mencoba memproses antrean setelah respons, sedangkan worker terjadwal menjadi jalur retry/durable. Task yang gagal karena timeout, kuota, atau gangguan sementara dijadwalkan ulang dengan backoff; mode `remember` disimpan tanpa panggilan model tambahan, mode `private` tetap terbatas pada percakapan, dan mode `off` tidak membuat task.
 
 ## Aktifkan scheduler di Supabase Cloud
 
