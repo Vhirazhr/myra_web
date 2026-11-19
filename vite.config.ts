@@ -16,6 +16,16 @@ export default defineConfig(({ mode }) => {
     build: {
       sourcemap: emitSourcemaps ? "inline" : false,
       minify: !emitSourcemaps,
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              { name: "supabase", test: /node_modules.*@supabase/ },
+              { name: "react", test: /node_modules.*(?:react-dom|react-router|\/react\/)/ },
+            ],
+          },
+        },
+      },
     },
     plugins: [
       react(),

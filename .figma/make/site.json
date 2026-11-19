@@ -6,5 +6,9 @@
   "accessibility": {
     "addBypassLinks": false,
     "ignoreReducedMotion": false
+  },
+  "title": "MYRA",
+  "icons": {
+    "icon": "/myra-logo.png"
   }
 }
