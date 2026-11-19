@@ -20,6 +20,7 @@ import {
   Stories,
 } from "./pages/Studios";
 import { Conversations, CallStudio } from "./pages/Conversations";
+import { CharacterMediaStudio } from "./pages/CharacterMediaStudio";
 const items = nav.flatMap((g) =>
   g.items.map((i) => ({ name: i[0], id: i[2] as string, section: g.section })),
 );
@@ -43,6 +44,7 @@ function Page({ page }: { page: string }) {
     return <Stories scheduler={page === "story-scheduler"} />;
   if (["simulation", "context", "response", "proactive", "language", "environment"].includes(page))
     return <Settings page={page} title={item!.name} />;
+  if (page === "character-media") return <CharacterMediaStudio />;
   if (["media", "gallery", "storage"].includes(page)) return <Library page={page} />;
   if (page === "calls") return <CallStudio />;
   if (page === "backup") return <Backup />;

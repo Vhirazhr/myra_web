@@ -226,20 +226,49 @@ export async function generate(ctx: Context, sourceId: string) {
         if (!/^NONE[.!]?$/i.test(extracted.trim())) fact = extracted;
         if (source.memory_mode === "private") scope = "thread_only";
       }
-      replies.push(
-        checked(
-          await service.rpc("finish_ai_reply", {
-            actor,
-            job,
-            token,
-            source: source.id,
-            speaker,
-            answer,
-            fact,
-            fact_type: scope,
-          }),
-        ),
+      const replyId = checked(
+        await service.rpc("finish_ai_reply", {
+          actor,
+          job,
+          token,
+          source: source.id,
+          speaker,
+          answer,
+          fact,
+          fact_type: scope,
+        }),
       );
+
+      // Reuse previously generated media when the user explicitly asks for a photo/video.
+      const requestText = (source.body || "").toLowerCase();
+      const wantsVideo = /\b(video|vidio|clip|movie|rekaman)\b/.test(requestText);
+      const wantsImage = /\b(photo|picture|image|selfie|foto|gambar)\b/.test(requestText);
+      if (wantsVideo || wantsImage) {
+        const candidates = checked(
+          await db.from("media_assets").select("id,bucket,path,mime,name,description,tags")
+            .eq("owner_id", actor).eq("character_id", speaker).eq("bucket", "stories")
+            .order("created_at", { ascending: false }).limit(50),
+        );
+        const relevant = candidates
+          .filter((asset) => wantsVideo ? asset.mime.startsWith("video/") : asset.mime.startsWith("image/"))
+          .map((asset) => {
+            const searchable = [asset.name, asset.description, ...(asset.tags || [])].join(" ").toLowerCase();
+            const words = requestText.split(/[^a-z0-9]+/).filter((word) => word.length > 3);
+            const score = words.reduce((total, word) => total + (searchable.includes(word) ? 2 : 0), 0);
+            return { asset, score };
+          })
+          .sort((a, b) => b.score - a.score)[0]?.asset;
+        if (relevant) {
+          checked(
+            await service.from("messages").update({
+              attachment: relevant.path,
+              attachment_bucket: relevant.bucket,
+              mime: relevant.mime,
+            }).eq("id", replyId).eq("owner_id", actor).select("id").single(),
+          );
+        }
+      }
+      replies.push(replyId);
     } catch (error) {
       checked(await service.rpc("release_ai_job", { actor, job, token }));
       throw error;
