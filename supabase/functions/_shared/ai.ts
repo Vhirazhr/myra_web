@@ -40,8 +40,9 @@ export async function completion(
   messages: Turn[],
   onDelta?: (answer: string) => Promise<void>,
   _internalAttempt = 0,
+  options: { providerId?: string; adapter?: string } = {},
 ) {
-  return completeWithProviders(ctx, operation, messages, onDelta);
+  return completeWithProviders(ctx, operation, messages, onDelta, options);
 }
 
 type MemoryTask = {
