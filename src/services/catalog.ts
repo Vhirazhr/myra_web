@@ -188,6 +188,26 @@ export const preferences: Spec = {
     number("memory_limit", "Memories per request", 12, 1, 40),
   ],
 };
+
+export const aiProvider: Spec = {
+  table: "providers",
+  singular: "AI provider",
+  label: "name",
+  description: "Provider credentials are configured as Supabase Edge Function secrets; this form stores only the secret variable name.",
+  fields: [
+    text("name", "Provider name", true),
+    choose("adapter", "Provider adapter", ["gemini", "openrouter", "openai", "anthropic", "compatible"]),
+    text("model", "Model ID", true),
+    number("priority", "Priority (lower runs first)", 1, 1, 50),
+    check("enabled", "Enabled for automatic fallback"),
+    number("temperature", "Temperature", 0.7, 0, 2),
+    check("supports_vision", "Model accepts image input"),
+    { ...text("base_url", "Official API base URL"), when: ["adapter", "compatible"] },
+    { ...text("secret_name", "Supabase secret variable name"), when: ["adapter", "compatible"] },
+    number("input_price", "Input price per 1M tokens (USD)", 0, 0, 1000),
+    number("output_price", "Output price per 1M tokens (USD)", 0, 0, 1000),
+  ],
+};
 export const catalog: Record<string, Spec> = {
   characters: character,
   universes: universe,
