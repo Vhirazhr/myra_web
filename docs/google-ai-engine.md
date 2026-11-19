@@ -63,3 +63,7 @@ Google Flow does not expose the user's Google AI Plus subscription as a callable
 - Google documents that content sent through the unpaid Gemini API tier may be used to improve Google products. Avoid sending highly sensitive personal conversations through the free tier.
 - Google AI Plus is a consumer subscription for Google's supported apps and does not automatically grant API quota or make Flow callable from MYRA.
 - Live API sessions and TTS are subject to their own model availability and quota limits. Check Google AI Studio's current usage dashboard if requests are rate-limited.
+
+## Chat latency and memory processing
+
+Conversation responses use Gemini's SSE streaming endpoint and are persisted incrementally to the assistant message so Supabase Realtime can display partial text. The prompt context and output budget are capped to reduce latency. Memory extraction is queued after the reply is committed; it does not delay the chat response. The Edge Function attempts a background drain, and the scheduled worker retries transient failures with backoff. Explicit `remember` requests are saved without a second model call.
