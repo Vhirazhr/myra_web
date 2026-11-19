@@ -37,6 +37,7 @@ export async function completion(
   ctx: Context,
   operation: string,
   messages: Turn[],
+  onDelta?: (answer: string) => Promise<void>,
 ) {
   const apiKey = required("GEMINI_API_KEY");
   const model = Deno.env.get("GEMINI_CHAT_MODEL") || "gemini-3.6-flash";
@@ -48,7 +49,7 @@ export async function completion(
     ? 0.2
     : 0.55;
   const maxOutputTokens = operation === "conversation"
-    ? 1100
+    ? 850
     : operation === "initiative"
     ? 260
     : operation === "summary"
@@ -80,56 +81,114 @@ export async function completion(
   let failure = "";
   let failureStatus = 502;
   const timeoutMs = operation === "conversation"
-    ? 35000
+    ? 45000
     : operation === "memory extraction"
-    ? 8000
+    ? 15000
     : operation === "connection test"
     ? 15000
     : operation === "initiative"
     ? 20000
     : 30000;
+  const streaming = operation === "conversation" && typeof onDelta === "function";
   try {
-    const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/" +
-        encodeURIComponent(model) + ":generateContent",
-      {
-        method: "POST",
-        headers: {
-          "x-goog-api-key": apiKey,
-          "Content-Type": "application/json",
-        },
-        signal: AbortSignal.timeout(timeoutMs),
-        body: JSON.stringify({
-          systemInstruction: systemInstruction
-            ? { parts: [{ text: systemInstruction.slice(0, 36000) }] }
-            : undefined,
-          contents,
-          generationConfig: {
-            temperature,
-            maxOutputTokens,
-            thinkingConfig: { thinkingLevel: "LOW" },
-          },
-        }),
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/" +
+      encodeURIComponent(model) + (streaming ? ":streamGenerateContent?alt=sse" : ":generateContent");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "x-goog-api-key": apiKey,
+        "Content-Type": "application/json",
       },
-    );
-    const payload = await response.json();
+      signal: AbortSignal.timeout(timeoutMs),
+      body: JSON.stringify({
+        systemInstruction: systemInstruction
+          ? { parts: [{ text: systemInstruction.slice(0, 18000) }] }
+          : undefined,
+        contents,
+        generationConfig: {
+          temperature,
+          maxOutputTokens,
+          thinkingConfig: { thinkingLevel: "LOW" },
+        },
+      }),
+    });
     if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
       const status = response.status;
       throw new HttpError(
         status === 429 ? 429 : status >= 500 ? 502 : status,
         payload.error?.message || "Gemini API returned HTTP " + status,
       );
     }
-    answer = (payload.candidates?.[0]?.content?.parts || [])
-      .map((part: { text?: string }) => part.text || "")
-      .join("")
-      .trim();
-    if (!answer) {
-      const reason = payload.candidates?.[0]?.finishReason;
-      throw new Error(reason ? "Gemini returned no text (" + reason + ")" : "Gemini returned no text");
+
+    const contentType = response.headers.get("content-type") || "";
+    if (streaming && contentType.includes("text/event-stream")) {
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("Gemini streaming response has no readable body");
+      const decoder = new TextDecoder();
+      let pending = "";
+      const handleLine = async (line: string) => {
+        if (!line.startsWith("data:")) return;
+        const data = line.slice(5).trim();
+        if (!data || data === "[DONE]") return;
+        const event = JSON.parse(data);
+        if (event.error) {
+          throw new HttpError(
+            event.error.code === 429 ? 429 : event.error.code >= 500 ? 502 : 502,
+            event.error.message || "Gemini streaming request failed",
+          );
+        }
+        const delta = (event.candidates?.[0]?.content?.parts || [])
+          .map((part: { text?: string }) => part.text || "")
+          .join("");
+        if (delta) {
+          answer += delta;
+          try {
+            await onDelta!(answer);
+          } catch (streamError) {
+            console.error("[MYRA] Could not persist a streamed reply chunk", {
+              error: streamError instanceof Error ? streamError.message : "Database update failed",
+            });
+          }
+        }
+        inputTokens = event.usageMetadata?.promptTokenCount ?? inputTokens;
+        outputTokens = event.usageMetadata?.candidatesTokenCount ?? outputTokens;
+      };
+      while (true) {
+        const { value, done } = await reader.read();
+        pending += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const lines = pending.split(/\r?\n/);
+        pending = lines.pop() || "";
+        for (const line of lines) await handleLine(line);
+        if (done) break;
+      }
+      if (pending.trim()) await handleLine(pending);
+      if (answer) {
+        try {
+          await onDelta!(answer);
+        } catch (streamError) {
+          console.error("[MYRA] Could not persist the final streamed reply chunk", {
+            error: streamError instanceof Error ? streamError.message : "Database update failed",
+          });
+        }
+      }
+    } else {
+      const payload = await response.json();
+      if (payload.error) {
+        throw new HttpError(502, payload.error.message || "Gemini API request failed");
+      }
+      answer = (payload.candidates?.[0]?.content?.parts || [])
+        .map((part: { text?: string }) => part.text || "")
+        .join("")
+        .trim();
+      inputTokens = payload.usageMetadata?.promptTokenCount ?? null;
+      outputTokens = payload.usageMetadata?.candidatesTokenCount ?? null;
+      if (!answer) {
+        const reason = payload.candidates?.[0]?.finishReason;
+        throw new Error(reason ? "Gemini returned no text (" + reason + ")" : "Gemini returned no text");
+      }
     }
-    inputTokens = payload.usageMetadata?.promptTokenCount ?? null;
-    outputTokens = payload.usageMetadata?.candidatesTokenCount ?? null;
+    if (!answer.trim()) throw new Error("Gemini returned an empty streamed response");
   } catch (error) {
     if (error instanceof HttpError) {
       failure = error.message;
@@ -169,6 +228,69 @@ export async function completion(
   if (failure) throw new HttpError(failureStatus, failure);
   return answer;
 }
+
+type MemoryTask = {
+  id: string;
+  owner_id: string;
+  source_message_id: string;
+  memory_mode: "automatic" | "remember" | "private";
+  attempts: number;
+};
+
+export async function processMemoryTasks(db: Context["db"], batchSize = 2) {
+  const tasks = checked(
+    await db.rpc("claim_memory_tasks", { batch_size: batchSize }),
+  ) as MemoryTask[];
+  let completed = 0;
+  for (const task of tasks) {
+    try {
+      const source = checked(
+        await db.from("messages").select("body").eq("id", task.source_message_id)
+          .eq("owner_id", task.owner_id).single(),
+      );
+      let fact = "";
+      if (task.memory_mode !== "remember") {
+        fact = await completion(
+          { db, service: db, actor: task.owner_id },
+          "memory extraction",
+          [
+            {
+              role: "system",
+              content:
+                "Extract one durable fact explicitly stated by the user for future conversations. Reply with only that fact in a single short sentence. If the user asks a question or states no lasting fact, reply only NONE.",
+            },
+            { role: "user", content: source.body },
+          ],
+        );
+      }
+      checked(await db.rpc("finish_memory_task", { task_id: task.id, fact }));
+      completed++;
+    } catch (error) {
+      const retryable = !(error instanceof HttpError) ||
+        [429, 502, 503, 504].includes(error.status);
+      const retry = retryable && task.attempts < 4;
+      const delaySeconds = Math.min(60 * (2 ** Math.max(0, task.attempts - 1)), 900);
+      const message = error instanceof Error ? error.message : "Memory processing failed";
+      const update = await db.from("memory_tasks").update({
+        status: retry ? "pending" : "failed",
+        available_at: new Date(Date.now() + delaySeconds * 1000).toISOString(),
+        last_error: message.slice(0, 1000),
+        updated_at: new Date().toISOString(),
+      }).eq("id", task.id).eq("status", "processing").select("id").maybeSingle();
+      if (update.error) {
+        console.error("[MYRA] Could not update memory task status", update.error.message);
+      }
+      console.error("[MYRA] Memory task failed", {
+        task: task.id,
+        attempt: task.attempts,
+        retry,
+        error: message,
+      });
+    }
+  }
+  return completed;
+}
+
 export async function generate(ctx: Context, sourceId: string) {
   const { db, actor, service } = ctx;
   const source = checked(
