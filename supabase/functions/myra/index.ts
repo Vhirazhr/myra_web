@@ -335,7 +335,7 @@ export const handler = endpoint(async (req) => {
       if (!tokenResponse.ok || !payload.name) {
         throw new Error(payload.error?.message || "Gemini Live token request failed");
       }
-      return { token: payload.name, id: record.id, model, config };
+      return { token: payload.name, id: record.id, model };
     } catch (error) {
       checked(
         await db.from("calls").update({
