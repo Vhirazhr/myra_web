@@ -101,7 +101,8 @@ export function Editor({
 }) {
   const [values, setValues] = useState(() => initialValues(spec, row)),
     [files, setFiles] = useState<Record<string, File>>({}),
-    [step, setStep] = useState(0);
+    [step, setStep] = useState(0),
+    [maxVisitedStep, setMaxVisitedStep] = useState(0);
   const rosterTable = spec.table === "groups" ? "group_members" : "universe_characters";
   const parent = spec.table === "groups" ? "group_id" : "universe_id";
   const hasRoster = spec.fields.some((f) => f.type === "multi");
@@ -121,6 +122,7 @@ export function Editor({
     setValues(initialValues(spec, row));
     setFiles({});
     setRosterTouched(false);
+    setMaxVisitedStep(0);
     done();
   };
   const persist = useMutation({
@@ -142,6 +144,7 @@ export function Editor({
               if (f.key === "media") fields.mime = asset.mime;
             }
           }
+          if (draft && f.key !== "name" && (val === "" || val == null)) continue;
           if (f.required && !String(val ?? "").trim()) throw new Error(f.label + " is required");
           if (f.type === "number") {
             val = z.coerce
@@ -267,8 +270,10 @@ export function Editor({
         className="editor-form"
         onSubmit={(e) => {
           e.preventDefault();
-          if (wizard && step < 7) setStep(step + 1);
-          else persist.mutate(false);
+          if (wizard && step < 7) {
+            setMaxVisitedStep((visited) => Math.max(visited, step + 1));
+            setStep(step + 1);
+          } else persist.mutate(false);
         }}
       >
         {wizard && (
@@ -278,6 +283,8 @@ export function Editor({
                 type="button"
                 key={s}
                 className={i === step ? "active" : ""}
+                disabled={i > maxVisitedStep}
+                aria-current={i === step ? "step" : undefined}
                 onClick={() => setStep(i)}
               >
                 <span>{i + 1}</span>

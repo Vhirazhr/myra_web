@@ -624,4 +624,12 @@ test("responsive shell keeps navigation, search and page motion usable", async (
   await page.emulateMedia({ reducedMotion: "reduce" });
   const reducedDuration = await page.locator(".page").first().evaluate((element) => getComputedStyle(element).animationDuration);
   expect(parseFloat(reducedDuration)).toBeLessThan(0.001);
+
+  await page.goto("/character-new");
+  await expect(page.getByRole("button", { name: "8 Scenario" })).toBeDisabled();
+  await page.getByLabel("Character name").fill("Wizard navigation check");
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByRole("button", { name: "3 Personality" })).toBeDisabled();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "All Characters" })).toBeVisible();
 });

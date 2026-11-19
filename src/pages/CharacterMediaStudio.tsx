@@ -340,7 +340,7 @@ export function CharacterMediaStudio() {
         )}
         {assets.isLoading ? (
           <p className="empty">Loading character media…</p>
-        ) : assets.data?.length ? (
+        ) : characterAssets.length ? (
           <div className="media-asset-grid">
             {characterAssets.map((asset) => (
               <article className="media-asset-card" key={asset.id}>
