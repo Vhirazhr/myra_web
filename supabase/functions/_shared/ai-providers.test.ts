@@ -91,7 +91,7 @@ Deno.test("automatic routing sorts providers and falls back after a rate limit",
       "https://api.openai.com/v1/chat/completions",
     ], "provider order");
     assertEquals(usage.length, 2, "usage records");
-    assertIncludes(String(usage[0].error), "HTTP 429", "first provider error");
+    assertIncludes(String(usage[0].error), "rate limit", "first provider error");
     assertEquals(usage[1].input_tokens, 12, "successful input token count");
   } finally {
     globalThis.fetch = originalFetch;
