@@ -248,8 +248,8 @@ export async function generate(ctx: Context, sourceId: string) {
         ? "language-learning"
         : "hybrid";
       const requestText = (source.body || "").toLowerCase();
-      const wantsVideo = /\\b(video|vidio|clip|klip|movie|rekaman)\\b/.test(requestText);
-      const wantsImage = /\\b(pict|photo|picture|image|selfie|foto|gambar|potret)\\b/.test(requestText);
+      const wantsVideo = /\b(video|vidio|clip|klip|movie|rekaman)\b/.test(requestText);
+      const wantsImage = /\b(pict|photo|picture|image|selfie|foto|gambar|potret)\b/.test(requestText);
       let mediaAsset: {
         id: string;
         bucket: string;
