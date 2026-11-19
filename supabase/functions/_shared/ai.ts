@@ -38,6 +38,7 @@ export async function completion(
   operation: string,
   messages: Turn[],
   onDelta?: (answer: string) => Promise<void>,
+  internalAttempt = 0,
 ) {
   const apiKey = required("GEMINI_API_KEY");
   const model = Deno.env.get("GEMINI_CHAT_MODEL") || "gemini-3.6-flash";
@@ -116,7 +117,7 @@ export async function completion(
       const payload = await response.json().catch(() => ({}));
       const status = response.status;
       throw new HttpError(
-        status === 429 ? 429 : status >= 500 ? 502 : status,
+        status === 429 ? 429 : status >= 500 ? status : status,
         payload.error?.message || "Gemini API returned HTTP " + status,
       );
     }
@@ -133,8 +134,9 @@ export async function completion(
         if (!data || data === "[DONE]") return;
         const event = JSON.parse(data);
         if (event.error) {
+          const eventStatus = Number(event.error.code) || 502;
           throw new HttpError(
-            event.error.code === 429 ? 429 : event.error.code >= 500 ? 502 : 502,
+            eventStatus === 429 ? 429 : eventStatus >= 500 ? eventStatus : 502,
             event.error.message || "Gemini streaming request failed",
           );
         }
@@ -205,11 +207,33 @@ export async function completion(
       failureStatus = 502;
     }
   }
+  const retryableGeminiFailure =
+    failureStatus === 502 || failureStatus === 503 || failureStatus === 504 ||
+    (failureStatus === 429 && /overload|high demand|rate.?limit|temporar/i.test(failure));
+  if (
+    failure &&
+    operation === "conversation" &&
+    retryableGeminiFailure &&
+    internalAttempt < 1 &&
+    answer.length === 0
+  ) {
+    console.warn("[MYRA] Gemini temporary failure; retrying primary provider once", {
+      operation,
+      model,
+      status: failureStatus,
+      attempt: internalAttempt + 1,
+      error: failure,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    return completion(ctx, operation, messages, onDelta, internalAttempt + 1);
+  }
   if (failure) {
     console.error("[MYRA] Gemini request failed", {
       operation,
       model,
       status: failureStatus,
+      attempts: internalAttempt + 1,
+      retryable: retryableGeminiFailure,
       error: failure,
     });
   }
