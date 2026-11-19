@@ -514,6 +514,7 @@ function implicitGemini(): Provider {
     model: Deno.env.get("GEMINI_CHAT_MODEL") || "gemini-3.6-flash",
     priority: 1000,
     enabled: true,
+    supports_vision: true,
   };
 }
 
