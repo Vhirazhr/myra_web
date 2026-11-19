@@ -171,7 +171,7 @@ export const handler = endpoint(async (req) => {
   }
   if (b.action === "voice-note") {
     const m = checked(
-      await db.from("messages").select("*,characters(voice)").eq("owner_id", actor).eq("id", id(b.id))
+      await db.from("messages").select("*,characters(name,personality,communication,background,voice)").eq("owner_id", actor).eq("id", id(b.id))
         .eq("role", "assistant").single(),
     );
     if (m.attachment && m.mime.startsWith("audio/")) return { path: m.attachment };
@@ -179,7 +179,11 @@ export const handler = endpoint(async (req) => {
     const model = Deno.env.get("GEMINI_TTS_MODEL") || "gemini-3.8-flash-tts";
     const generated = await geminiRequest("interactions", {
       model,
-      input: "Speak this message naturally and warmly as the character. Preserve the exact wording and use expressive, conversational delivery:\n\n" +
+      input: "Speak this message naturally as " + (m.characters?.name || "the character") +
+        ". Voice direction: " + String(m.characters?.communication || "warm, expressive, conversational") +
+        ". Character personality: " + JSON.stringify(m.characters?.personality || {}) +
+        ". Background context: " + String(m.characters?.background || "").slice(0, 700) +
+        ". Preserve the exact wording; do not add or omit sentences.\n\n" +
         String(m.body || "").slice(0, 4096),
       response_format: { type: "audio" },
       generation_config: { speech_config: [{ voice }] },
