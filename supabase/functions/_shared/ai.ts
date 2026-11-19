@@ -247,6 +247,33 @@ export async function generate(ctx: Context, sourceId: string) {
         : thread.mode === "learning"
         ? "language-learning"
         : "hybrid";
+      const requestText = (source.body || "").toLowerCase();
+      const wantsVideo = /\\b(video|vidio|clip|klip|movie|rekaman)\\b/.test(requestText);
+      const wantsImage = /\\b(pict|photo|picture|image|selfie|foto|gambar|potret)\\b/.test(requestText);
+      let mediaAsset: {
+        id: string;
+        bucket: string;
+        path: string;
+        mime: string;
+        name: string;
+        description: string;
+      } | null = null;
+      if (wantsVideo || wantsImage) {
+        const candidates = checked(
+          await db.from("media_assets").select("id,bucket,path,mime,name,description,tags")
+            .eq("owner_id", actor).eq("character_id", speaker).eq("bucket", "stories")
+            .order("created_at", { ascending: false }).limit(50),
+        );
+        mediaAsset = candidates
+          .filter((asset) => wantsVideo ? asset.mime.startsWith("video/") : asset.mime.startsWith("image/"))
+          .map((asset) => {
+            const searchable = [asset.name, asset.description, ...(asset.tags || [])].join(" ").toLowerCase();
+            const words = requestText.split(/[^a-z0-9]+/).filter((word) => word.length > 3);
+            const score = words.reduce((total, word) => total + (searchable.includes(word) ? 2 : 0), 0);
+            return { asset, score };
+          })
+          .sort((a, b) => b.score - a.score)[0]?.asset || null;
+      }
       const roleplayRules = [
         "CORE IDENTITY: Stay faithful to the selected character's biography, background, appearance, personality, communication style, scenario, boundaries, and relationship setup. These fields are active instructions, not decorative profile text.",
         "HYBRID CONVERSATION: Default to natural, spontaneous chat. Use brief action beats or expressive dialogue when they add emotion, but do not turn every ordinary message into a long narrated scene. Expand into immersive roleplay when the user starts a scene, asks for detail, or the moment genuinely calls for it.",
@@ -259,6 +286,7 @@ export async function generate(ctx: Context, sourceId: string) {
         "CONTINUITY: Use recent messages and relevant memories. Remember promises, ongoing topics, relationship milestones, and preferences. Do not invent personal facts or claim an event happened unless it appears in the conversation or character's fictional setting.",
         "LANGUAGE: Follow the conversation language and the character's preferred language. Use casual Indonesian when configured; preserve distinctive expressions sparingly and naturally.",
         "MODE: " + responseStyle + ". In language-learning mode, gently support the learning goal without losing the character's voice.",
+        "MEDIA HONESTY: If the user asks for a photo or video, only say it is attached when session context confirms a matching saved media asset will be attached. If none is available, be honest and do not pretend to send a file.",
         "GROUP PLAY: When other characters are present, preserve each participant's distinct voice and do not speak for the user.",
       ].join("\n");
       const answer = await completion(ctx, "conversation", [
@@ -277,6 +305,11 @@ export async function generate(ctx: Context, sourceId: string) {
               crossover,
               mood: world || crossover ? undefined : diary,
               relationships: relations,
+              media_request: wantsVideo ? "video" : wantsImage ? "image" : null,
+              media_available: Boolean(mediaAsset),
+              media_asset_description: mediaAsset
+                ? { name: mediaAsset.name, description: mediaAsset.description, mime: mediaAsset.mime }
+                : null,
               style: prefs?.system_prompt,
             }).slice(0, 28000),
         },
@@ -324,34 +357,14 @@ export async function generate(ctx: Context, sourceId: string) {
         }),
       );
 
-      // Reuse previously generated media when the user explicitly asks for a photo/video.
-      const requestText = (source.body || "").toLowerCase();
-      const wantsVideo = /\b(video|vidio|clip|movie|rekaman)\b/.test(requestText);
-      const wantsImage = /\b(photo|picture|image|selfie|foto|gambar)\b/.test(requestText);
-      if (wantsVideo || wantsImage) {
-        const candidates = checked(
-          await db.from("media_assets").select("id,bucket,path,mime,name,description,tags")
-            .eq("owner_id", actor).eq("character_id", speaker).eq("bucket", "stories")
-            .order("created_at", { ascending: false }).limit(50),
+      if (mediaAsset) {
+        checked(
+          await service.from("messages").update({
+            attachment: mediaAsset.path,
+            attachment_bucket: mediaAsset.bucket,
+            mime: mediaAsset.mime,
+          }).eq("id", replyId).eq("owner_id", actor).select("id").single(),
         );
-        const relevant = candidates
-          .filter((asset) => wantsVideo ? asset.mime.startsWith("video/") : asset.mime.startsWith("image/"))
-          .map((asset) => {
-            const searchable = [asset.name, asset.description, ...(asset.tags || [])].join(" ").toLowerCase();
-            const words = requestText.split(/[^a-z0-9]+/).filter((word) => word.length > 3);
-            const score = words.reduce((total, word) => total + (searchable.includes(word) ? 2 : 0), 0);
-            return { asset, score };
-          })
-          .sort((a, b) => b.score - a.score)[0]?.asset;
-        if (relevant) {
-          checked(
-            await service.from("messages").update({
-              attachment: relevant.path,
-              attachment_bucket: relevant.bucket,
-              mime: relevant.mime,
-            }).eq("id", replyId).eq("owner_id", actor).select("id").single(),
-          );
-        }
       }
       replies.push(replyId);
     } catch (error) {
