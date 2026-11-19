@@ -208,6 +208,7 @@ function Thread({ id }: { id: string }) {
                     {new Date(m.created_at).toLocaleString()}
                   </small>
                   {parent && <blockquote>{parent.body}</blockquote>}
+                  {m.is_proactive && <small className="proactive-label">Started this chat</small>}
                   <p>{m.body}</p>
                   {m.transcript && <p>{m.transcript}</p>}
                   {m.attachment && (
@@ -487,3 +488,5 @@ export function CallStudio() {
     </div>
   );
 }
+
+.proactive-label{display:inline-flex;width:max-content;padding:3px 7px;border-radius:999px;background:var(--pink-dim);color:var(--pink);font-size:9px;font-weight:600;margin:3px 0}
