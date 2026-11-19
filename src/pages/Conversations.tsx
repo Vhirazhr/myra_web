@@ -489,4 +489,3 @@ export function CallStudio() {
   );
 }
 
-.proactive-label{display:inline-flex;width:max-content;padding:3px 7px;border-radius:999px;background:var(--pink-dim);color:var(--pink);font-size:9px;font-weight:600;margin:3px 0}
