@@ -241,8 +241,8 @@ export async function generate(ctx: Context, sourceId: string) {
 
       // Reuse previously generated media when the user explicitly asks for a photo/video.
       const requestText = (source.body || "").toLowerCase();
-      const wantsVideo = /\\b(video|vidio|clip|movie|rekaman)\\b/.test(requestText);
-      const wantsImage = /\\b(photo|picture|image|selfie|foto|gambar)\\b/.test(requestText);
+      const wantsVideo = /\b(video|vidio|clip|movie|rekaman)\b/.test(requestText);
+      const wantsImage = /\b(photo|picture|image|selfie|foto|gambar)\b/.test(requestText);
       if (wantsVideo || wantsImage) {
         const candidates = checked(
           await db.from("media_assets").select("id,bucket,path,mime,name,description,tags")
