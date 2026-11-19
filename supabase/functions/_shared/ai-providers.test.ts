@@ -182,3 +182,39 @@ Deno.test("compatible adapters reject unapproved secret variable names", withEnv
   assertEquals(failed, true, "unsafe secret name should be rejected");
   assertEquals(usage.length, 1, "configuration failure should be logged");
 }));
+
+
+Deno.test("compatible adapters reject arbitrary hosts and nonstandard ports", withEnv({
+  DEEPSEEK_API_KEY: "test-deepseek",
+}, async () => {
+  for (const baseURL of [
+    "https://attacker.example/v1",
+    "https://api.deepseek.com:8443/v1",
+  ]) {
+    const { ctx, usage } = mockContext([
+      {
+        id: "compatible",
+        name: "Compatible provider",
+        adapter: "compatible",
+        model: "mock-model",
+        priority: 1,
+        enabled: true,
+        base_url: baseURL,
+        secret_name: "DEEPSEEK_API_KEY",
+      },
+    ]);
+    let failed = false;
+    try {
+      await completeWithProviders(ctx, "summary", [{ role: "user", content: "hello" }]);
+    } catch (error) {
+      failed = true;
+      assertIncludes(
+        error instanceof Error ? error.message : String(error),
+        "approved HTTPS API host",
+        "compatible URL allowlist",
+      );
+    }
+    assertEquals(failed, true, "unsafe compatible URL should be rejected");
+    assertEquals(usage.length, 1, "rejected URL should be logged");
+  }
+}));
