@@ -21,7 +21,7 @@ on conflict do nothing;
    ```sh
    pnpm exec supabase secrets set GEMINI_API_KEY=YOUR_GOOGLE_AI_STUDIO_KEY
    ```
-   MYRA memakai `gemini-3.8-flash` untuk chat dan memori, `gemini-3.8-live` untuk voice call, serta `gemini-3.8-flash-lite-tts` untuk voice note. Model default dapat diubah melalui `GEMINI_CHAT_MODEL`, `GEMINI_LIVE_MODEL`, dan `GEMINI_TTS_MODEL`. Buka **Google AI Engine** dan pilih **Test Gemini connection**.
+   MYRA memakai `gemini-3.8-flash` untuk chat dan memori, `gemini-3.8-live` untuk voice call, serta `gemini-3.8-flash-tts` untuk voice note. Model default dapat diubah melalui `GEMINI_CHAT_MODEL`, `GEMINI_LIVE_MODEL`, dan `GEMINI_TTS_MODEL`. Buka **Google AI Engine** dan pilih **Test Gemini connection**.
 6. Hubungkan branch yang sudah direview ke Vercel dengan preset Vite, perintah `pnpm build`, dan direktori output `dist`. Setelah env frontend disimpan, buat deployment baru. Buka domain admin dan masuk memakai akun yang diprovisikan.
 
 | Fitur | Secret di server |
