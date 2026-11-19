@@ -176,7 +176,7 @@ export const handler = endpoint(async (req) => {
     );
     if (m.attachment && m.mime.startsWith("audio/")) return { path: m.attachment };
     const voice = googleVoice(m.characters?.voice);
-    const model = Deno.env.get("GEMINI_TTS_MODEL") || "gemini-3.8-flash-lite-tts";
+    const model = Deno.env.get("GEMINI_TTS_MODEL") || "gemini-3.8-flash-tts";
     const generated = await geminiRequest("interactions", {
       model,
       input: "Speak this message naturally and warmly as the character. Preserve the exact wording and use expressive, conversational delivery:\n\n" +
