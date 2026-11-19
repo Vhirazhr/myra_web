@@ -430,6 +430,59 @@ export function Settings({ page, title }: { page: string; title: string }) {
     </div>
   );
 }
+export function GoogleAIEngine() {
+  const test = useMutation({
+    mutationFn: () => call("test-google"),
+  });
+  return (
+    <div className="page">
+      <Heading
+        section="AI Engine"
+        title="Google AI Engine"
+        description="One Google API key powers Gemini chat, memory extraction, proactive messages, voice notes, transcription, and Gemini Live calls."
+      />
+      <Card className="wizard-form">
+        <Badge tone="green">Google ecosystem</Badge>
+        <h2>Connect Gemini API</h2>
+        <p>
+          Create a Gemini API key in Google AI Studio, then save it as a server-side Supabase
+          Edge Function secret. Do not put it in VITE_ variables, frontend code, or GitHub.
+        </p>
+        <pre><code>pnpm exec supabase secrets set GEMINI_API_KEY=YOUR_GOOGLE_AI_STUDIO_KEY</code></pre>
+        <p>
+          The default chat model is gemini-3.8-flash. Gemini Live uses gemini-3.8-live.
+          Voice notes use gemini-3.8-flash-lite-tts. These defaults can be overridden with
+          server-side model secrets if needed.
+        </p>
+        <div className="wizard-actions">
+          <Button disabled={test.isPending} onClick={() => test.mutate()}>
+            {test.isPending ? "Testing…" : "Test Gemini connection"}
+          </Button>
+        </div>
+        {test.data?.text && <p role="status">{test.data.text}</p>}
+        {test.error && <p className="form-error" role="alert">{errorText(test.error)}</p>}
+      </Card>
+      <Card className="wizard-form">
+        <h2>MYRA service routing</h2>
+        <div className="event-row"><strong>Chat, personality and memory</strong><span>Gemini API Free tier · gemini-3.8-flash</span></div>
+        <div className="event-row"><strong>Voice call</strong><span>Gemini Live · short-lived session tokens</span></div>
+        <div className="event-row"><strong>Voice notes</strong><span>Gemini TTS · gemini-3.8-flash-lite-tts</span></div>
+        <div className="event-row"><strong>Audio transcription</strong><span>Gemini multimodal understanding</span></div>
+        <div className="event-row"><strong>Character photos and videos</strong><span>Google Flow with your Google AI Plus subscription</span></div>
+        <p className="media-help">
+          Flow remains a manual Google AI Plus workflow: build a character prompt here, generate
+          in Flow, download the result, and import it into Character Media Studio. Flow does not
+          expose the Plus subscription as a callable MYRA API.
+        </p>
+        <p className="media-help">
+          The Gemini API Free tier has model-specific quotas and rate limits. Google may use
+          free-tier submitted content to improve its products. Check the current Google AI Studio
+          limits before using MYRA with private or sensitive conversations.
+        </p>
+      </Card>
+    </div>
+  );
+}
 export function Dashboard({ page }: { page: string }) {
   const metrics = useQuery({
       queryKey: ["rows", "metrics"],
@@ -515,7 +568,7 @@ export function Dashboard({ page }: { page: string }) {
             ))}
           </div>
           <h3>Recent AI requests</h3>
-          {!usage.data?.length && <p className="empty">No provider requests recorded.</p>}
+          {!usage.data?.length && <p className="empty">No Google AI requests recorded.</p>}
           {usage.data?.slice(0, 12).map((r) => (
             <div className="event-row" key={r.id}>
               <strong>{r.model}</strong>
