@@ -3381,3 +3381,34 @@ select[multiple] { min-height: 108px; padding: 8px; }
     padding: 7px 10px;
   }
 }
+
+/* Keep the shared picker compact inside chat composers and correctly clipped in forms. */
+.form-grid .file-picker-input,
+.composer .file-picker-input {
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+}
+.composer .wizard-actions .file-field {
+  flex: 1 1 100%;
+  grid-column: auto;
+}
+.composer .wizard-actions .file-picker-dropzone {
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  min-height: 82px;
+  padding: 10px;
+}
+.composer .wizard-actions .file-picker-preview {
+  width: 56px;
+  height: 56px;
+}
+@media (max-width: 600px) {
+  .composer .wizard-actions .file-field { grid-column: 1 / -1; }
+  .composer .wizard-actions .file-picker-dropzone {
+    grid-template-columns: 52px minmax(0, 1fr);
+    min-height: 76px;
+  }
+  .composer .wizard-actions .file-picker-preview { width: 52px; height: 52px; }
+  .composer .wizard-actions .file-picker-action { grid-column: 2; }
+}
