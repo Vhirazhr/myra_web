@@ -325,7 +325,14 @@ test("4–5 · real inference, persisted memory, scoped retrieval and group repl
       .eq("role", "user")
       .single(),
   ).data!;
-  ok(await client.functions.invoke("myra", { body: { action: "generate", id: source.id } }));
+  const retry = await client.functions.invoke("myra", {
+    body: { action: "generate", id: source.id },
+  });
+  if (retry.error)
+    throw new Error(
+      "Retry failed: " + ((await retry.error.context?.text()) || retry.error.message),
+    );
+  expect(retry.data.replies).toHaveLength(2);
   expect(
     ok(await client.from("messages").select("id").eq("source_id", source.id)).data,
   ).toHaveLength(2);

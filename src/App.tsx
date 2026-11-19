@@ -118,7 +118,7 @@ function Shell({ session }: { session: Session }) {
     worlds = useRows("universes");
   const logout = useMutation({
     mutationFn: async () => {
-      const { error } = await db().auth.signOut();
+      const { error } = await db().auth.signOut({ scope: "local" });
       if (error) throw error;
     },
   });

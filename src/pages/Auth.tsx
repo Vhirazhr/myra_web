@@ -24,7 +24,7 @@ export function Auth({
   const submit = useMutation({
     mutationFn: async () => {
       if (denied) {
-        result(await db().auth.signOut());
+        result(await db().auth.signOut({ scope: "local" }));
         return;
       }
       if (recover) {
