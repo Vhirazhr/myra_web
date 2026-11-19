@@ -196,10 +196,8 @@ export function CharacterMediaStudio() {
           </p>
         </div>
         <div className="media-bridge-credit">
-          <strong>50</strong>
-          <span>daily Flow credits</span>
-          <strong>+ 200</strong>
-          <span>monthly Plus credits</span>
+          <strong>Google Flow</strong>
+          <span>Use the credits and limits displayed in your own Google account.</span>
         </div>
       </div>
 
