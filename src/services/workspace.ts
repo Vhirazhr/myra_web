@@ -44,6 +44,63 @@ export async function save(table: string, values: Values, id?: string) {
 export async function remove(table: string, id: string) {
   result(await db().from(table).delete().eq("id", id).select("id").single());
 }
+async function removeMessageAttachments(items: Row[]) {
+  const grouped = new Map<string, string[]>();
+  for (const item of items) {
+    if (!item.attachment) continue;
+    const bucket = item.attachment_bucket ||
+      (item.role === "assistant" && item.mime?.startsWith("audio/") ? "voice-media" : "conversation-media");
+    const paths = grouped.get(bucket) || [];
+    paths.push(item.attachment);
+    grouped.set(bucket, paths);
+  }
+  for (const [bucket, paths] of grouped) {
+    const { error } = await db().storage.from(bucket).remove([...new Set(paths)]);
+    if (error) {
+      console.warn("[MYRA] Message deleted but attachment cleanup failed", {
+        bucket,
+        error: error.message,
+      });
+    }
+  }
+}
+export async function deleteMessage(conversationId: string, messageId: string) {
+  const history = await rows("messages", { conversation_id: conversationId });
+  const doomed = new Set([messageId]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const item of history) {
+      if (
+        !doomed.has(item.id) &&
+        (doomed.has(item.reply_to) || doomed.has(item.source_id))
+      ) {
+        doomed.add(item.id);
+        changed = true;
+      }
+    }
+  }
+  const affected = history.filter((item) => doomed.has(item.id));
+  result(
+    await db().from("messages").delete()
+      .eq("id", messageId)
+      .eq("conversation_id", conversationId)
+      .select("id")
+      .single(),
+  );
+  await removeMessageAttachments(affected);
+  return affected.length;
+}
+export async function clearConversationMessages(conversationId: string) {
+  const history = await rows("messages", { conversation_id: conversationId });
+  const deleted = result(
+    await db().from("messages").delete()
+      .eq("conversation_id", conversationId)
+      .select("id"),
+  ) as { id: string }[];
+  await removeMessageAttachments(history);
+  return deleted.length;
+}
 export async function call(action: string, data: Record<string, unknown> = {}) {
   const r = await db().functions.invoke("myra", { body: { action, ...data } });
   if (r.error) {
