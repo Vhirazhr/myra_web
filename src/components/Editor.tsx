@@ -117,6 +117,12 @@ export function Editor({
     if (key === "members") setRosterTouched(true);
     setValues((v) => ({ ...v, [key]: value }));
   };
+  const cancel = () => {
+    setValues(initialValues(spec, row));
+    setFiles({});
+    setRosterTouched(false);
+    done();
+  };
   const persist = useMutation({
     mutationFn: async (draft: boolean) => {
       const fields: Values = { ...spec.fixed };
@@ -218,11 +224,15 @@ export function Editor({
         {f.type === "ref" || f.type === "multi" ? (
           <Choices field={f} value={value ?? ""} change={change} />
         ) : f.type === "file" ? (
-          <input
-            type="file"
-            accept={f.accept}
-            onChange={(e) => setFiles((v) => ({ ...v, [f.key]: e.target.files![0] }))}
-          />
+          <>
+            <input type="file" accept={f.accept} onChange={(e) => {
+              const selected = e.target.files?.[0];
+              if (selected) setFiles((v) => ({ ...v, [f.key]: selected }));
+            }} />
+            {row?.[f.key] && <small className="field-hint">
+              An existing file is saved. Choose another file only if you want to replace it.
+            </small>}
+          </>
         ) : f.type === "area" ? (
           <textarea
             value={String(value ?? "")}
@@ -293,22 +303,10 @@ export function Editor({
               </p>
             )}
             <div className="wizard-actions">
-              <Button
-                secondary
-                disabled={persist.isPending}
-                onClick={() => {
-                  if (wizard && step) {
-                    setStep(step - 1);
-                    return;
-                  }
-                  setValues(initialValues(spec, row));
-                  setFiles({});
-                  setRosterTouched(false);
-                  done();
-                }}
-              >
-                {wizard && step ? "Back" : "Cancel"}
-              </Button>
+              {wizard && step > 0 && (
+                <Button secondary disabled={persist.isPending} onClick={() => setStep(step - 1)}>Back</Button>
+              )}
+              <Button secondary disabled={persist.isPending} onClick={cancel}>Cancel</Button>
               {wizard && (
                 <Button secondary disabled={persist.isPending} onClick={() => persist.mutate(true)}>
                   Save draft & exit
