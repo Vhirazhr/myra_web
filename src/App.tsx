@@ -16,6 +16,7 @@ import {
   Dashboard,
   GoogleAIEngine,
   Library,
+  MultiAIProviders,
   Settings,
   Social,
   Stories,
@@ -42,6 +43,7 @@ function Page({ page }: { page: string }) {
   if (["personality", "appearance", "voice", "voice-notes"].includes(page))
     return <CharacterLab page={page} />;
   if (page === "google-ai") return <GoogleAIEngine />;
+  if (page === "providers") return <MultiAIProviders />;
   if (page === "models") return <Navigate replace to="/providers" />;
   if (page === "providers") return <Records title="Multi-AI Providers" section="AI Engine" spec={catalog.aiProvider} />;
   if (page === "social") return <Social />;
