@@ -450,7 +450,7 @@ export function GoogleAIEngine() {
         </p>
         <pre><code>pnpm exec supabase secrets set GEMINI_API_KEY=YOUR_GOOGLE_AI_STUDIO_KEY</code></pre>
         <p>
-          The default chat model is gemini-3.8-flash. Gemini Live uses gemini-3.8-live.
+          The default chat model is gemini-3.6-flash. Gemini Live uses gemini-3.8-live.
           Voice notes use gemini-3.8-flash-tts. These defaults can be overridden with
           server-side model secrets if needed.
         </p>
@@ -464,7 +464,7 @@ export function GoogleAIEngine() {
       </Card>
       <Card className="wizard-form">
         <h2>MYRA service routing</h2>
-        <div className="event-row"><strong>Chat, personality and memory</strong><span>Gemini API Free tier · gemini-3.8-flash</span></div>
+        <div className="event-row"><strong>Chat, personality and memory</strong><span>Gemini API Free tier · gemini-3.6-flash</span></div>
         <div className="event-row"><strong>Voice call</strong><span>Gemini Live · short-lived session tokens</span></div>
         <div className="event-row"><strong>Voice notes</strong><span>Gemini TTS · gemini-3.8-flash-tts</span></div>
         <div className="event-row"><strong>Audio transcription</strong><span>Gemini multimodal understanding</span></div>
