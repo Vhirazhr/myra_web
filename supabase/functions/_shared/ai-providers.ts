@@ -231,6 +231,7 @@ function compatibleBaseURL(provider: Provider) {
     !COMPATIBLE_HOSTS.has(url.hostname) ||
     url.username ||
     url.password ||
+    url.port ||
     url.search ||
     url.hash
   ) {
