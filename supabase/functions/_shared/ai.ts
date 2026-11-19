@@ -39,7 +39,7 @@ export async function completion(
   messages: Turn[],
 ) {
   const apiKey = required("GEMINI_API_KEY");
-  const model = Deno.env.get("GEMINI_CHAT_MODEL") || "gemini-3.8-flash";
+  const model = Deno.env.get("GEMINI_CHAT_MODEL") || "gemini-3.6-flash";
   const temperature = operation === "conversation"
     ? 0.9
     : operation === "initiative"
@@ -80,12 +80,14 @@ export async function completion(
   let failure = "";
   let failureStatus = 502;
   const timeoutMs = operation === "conversation"
-    ? 85000
+    ? 35000
     : operation === "memory extraction"
     ? 8000
+    : operation === "connection test"
+    ? 15000
     : operation === "initiative"
-    ? 25000
-    : 40000;
+    ? 20000
+    : 30000;
   try {
     const response = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/" +
