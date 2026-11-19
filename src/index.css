@@ -2765,3 +2765,32 @@ input[type="range"]::-webkit-slider-thumb {
 @media(max-width:900px){.media-studio-grid,.media-asset-grid,.media-send-toolbar{grid-template-columns:1fr}.media-bridge-banner{align-items:flex-start;flex-direction:column}}
 
 .proactive-label{display:inline-flex;width:max-content;padding:3px 7px;border-radius:999px;background:var(--pink-dim);color:var(--pink);font-size:9px;font-weight:600;margin:3px 0}
+
+
+/* MYRA UI/UX audit: readability, keyboard focus and compact layouts */
+@layer base {
+  body { min-width: 320px; font-size: 14px; line-height: 1.55; }
+  button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible,
+  textarea:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
+}
+.page-heading h1 { font-size: 28px; line-height: 1.2; }
+.page-heading p { font-size: 13px; line-height: 1.55; }
+.btn { min-height: 40px; height: auto; padding: 9px 15px; font-size: 12px; }
+.badge { font-size: 10px; }
+.metrics p, .form-grid label, .composer label { font-size: 12px; }
+.metrics h2 { font-size: 20px; }
+.table-tools { align-items: center; flex-wrap: wrap; }
+.form-grid input, .form-grid select, .form-grid textarea, .modal input, .modal select,
+.modal textarea, .composer textarea { font-size: 13px; }
+.thread-history article { font-size: 14px; line-height: 1.6; }
+.empty, .form-error { font-size: 13px; line-height: 1.6; }
+@media(max-width:600px) {
+  .content { padding: 14px; }
+  .page-heading { align-items: stretch; flex-direction: column; }
+  .metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .record-list article { flex-wrap: wrap; }
+  .record-list .row-actions { width:100%; justify-content:flex-end; }
+  .modal-backdrop { padding: 12px; }
+  .modal { width:100%; max-width:100%; padding:16px; }
+  .thread-history article { max-width:94%; }
+}
