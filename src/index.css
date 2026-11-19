@@ -2794,3 +2794,93 @@ input[type="range"]::-webkit-slider-thumb {
   .modal { width:100%; max-width:100%; padding:16px; }
   .thread-history article { max-width:94%; }
 }
+
+
+/* MYRA UI/UX audit — navigation, readability and responsive behavior */
+.nav-group .nav-group-toggle {
+  width: 100%; min-height: 34px; height: auto; padding: 0 10px; margin: 0 0 5px;
+  display: flex; align-items: center; justify-content: space-between;
+  border: 0; border-radius: 7px; background: transparent; color: var(--muted);
+  font-size: 10px; font-weight: 800; letter-spacing: .12em; text-align: left; text-transform: uppercase;
+}
+.nav-group .nav-group-toggle:hover { color: var(--text); background: var(--card); }
+.nav-group .nav-group-toggle svg { transition: transform .18s ease; }
+.nav-group .nav-group-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.collapsed .nav-group-toggle { display: none; }
+.sidebar-backdrop { display: none; }
+.search-clear { flex: none; width: 25px; height: 25px; display: grid; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); }
+.search-clear:hover { background: var(--surface); color: var(--text); }
+.search-results { max-height: 340px; overflow-y: auto; border-radius: 10px; box-shadow: 0 12px 36px #0005; }
+.search-results button { min-height: 36px; padding: 8px 10px; border-radius: 6px; }
+.search-results button:hover, .search-results button:focus-visible { background: var(--surface); }
+.page-heading h1 { font-size: 28px; line-height: 1.2; }
+.page-heading p { font-size: 13px; line-height: 1.55; }
+.eyebrow { font-size: 10px !important; }
+.btn { min-height: 40px; height: auto; padding: 9px 15px; font-size: 12px; border-radius: 9px; }
+.badge { padding: 5px 8px; font-size: 10px; }
+.metrics p { font-size: 12px; }
+.metrics h2 { font-size: 20px; line-height: 1.25; }
+.form-grid label, .composer label, .wizard-form > label { font-size: 12px; }
+.form-grid input, .form-grid select, .form-grid textarea, .modal input, .modal select,
+.modal textarea, .composer textarea, .wizard-form input, .wizard-form select, .wizard-form textarea { font-size: 13px; }
+.record-main small, .record-main p, .details dt, .thread-history small { font-size: 12px; line-height: 1.5; }
+.record-title { font-size: 14px; }
+.message-actions button { font-size: 12px; }
+.thread-history article { font-size: 14px; line-height: 1.6; }
+.composer textarea { min-height: 100px; }
+.attachment-chip { display: flex; align-items: center; gap: 9px; }
+.attachment-chip button { border: 0; background: transparent; color: var(--muted); font-size: 11px; text-decoration: underline; }
+.field-hint { display: block; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.empty, .form-error { font-size: 13px; line-height: 1.6; }
+.usage-dashboard { grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); }
+.dashboard-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.usage-request { align-items: flex-start; }
+.usage-request > div { min-width: 0; display: grid; gap: 4px; }
+.usage-request > span { max-width: 48%; overflow-wrap: anywhere; text-align: right; }
+.usage-notes { padding: 18px; }
+.usage-notes p { color: var(--muted); font-size: 13px; line-height: 1.65; }
+.media-library-tools { justify-content: space-between; }
+.media-library-tools label { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.media-library-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.library-asset-card { min-width: 0; }
+.library-asset-card .asset-preview { width: 100%; max-height: 220px; object-fit: cover; }
+.library-asset-card h3 { overflow-wrap: anywhere; }
+@media (max-width: 900px) {
+  .sidebar-backdrop { display: block; position: fixed; inset: 0; z-index: 25; border: 0; background: #05050799; backdrop-filter: blur(2px); }
+  .sidebar:not(.collapsed) { width: min(280px, 84vw); box-shadow: 16px 0 48px #0007; }
+  .sidebar:not(.collapsed) ~ .shell { margin-left: 56px; width: calc(100% - 56px); }
+  .dashboard-overview, .usage-dashboard { grid-template-columns: 1fr; }
+  .usage-dashboard > .card { grid-column: auto; }
+  .media-library-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .topbar { gap: 10px; }
+  .top-actions { gap: 5px; }
+}
+@media (max-width: 600px) {
+  .content { padding: 14px; }
+  .topbar { min-height: 62px; height: auto; padding: 10px 12px; }
+  .top-title { min-width: 0; flex: 1; }
+  .top-actions > small { display: none; }
+  .top-actions .btn { min-height: 34px; padding: 7px 10px; font-size: 11px; }
+  .page-heading { flex-direction: column; align-items: stretch; gap: 14px; }
+  .page-heading > div:last-child { width: 100%; flex-wrap: wrap; }
+  .page-heading h1 { font-size: 24px; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .metrics .card { min-width: 0; padding: 12px; gap: 8px; }
+  .metric-icon { width: 30px; height: 30px; }
+  .record-list article { padding: 14px; gap: 10px; flex-wrap: wrap; }
+  .record-list .row-actions { width: 100%; justify-content: flex-end; }
+  .table-tools { padding: 10px; flex-wrap: wrap; }
+  .table-tools .search-box { min-width: 100%; width: 100%; }
+  .table-tools select { width: 100%; }
+  .media-library-tools label { width: 100%; justify-content: space-between; }
+  .media-library-tools select { flex: 1; min-width: 0; }
+  .media-library-grid { grid-template-columns: 1fr; }
+  .modal-backdrop { padding: 12px; }
+  .modal { width: 100%; max-width: 100%; padding: 16px; }
+  .login-card { width: min(390px, calc(100vw - 28px)); padding: 24px; }
+  .thread-history { max-height: 52vh; padding: 12px; }
+  .thread-history article { max-width: 94%; }
+  .composer { padding: 14px; }
+  .media-bridge-banner { padding: 16px; }
+  .media-bridge-credit { text-align: left; }
+}
