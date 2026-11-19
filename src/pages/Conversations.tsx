@@ -531,7 +531,6 @@ export function CallStudio() {
         ws.send(JSON.stringify({
           setup: {
             model: "models/" + result.model,
-            ...result.config,
           },
         }));
       };
