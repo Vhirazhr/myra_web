@@ -180,8 +180,10 @@ export function Editor({
         throw e;
       }
     },
-    onSuccess: async (r) => {
-      await refresh();
+    onSuccess: (r) => {
+      // Do not keep the Save button pending while every workspace query refetches.
+      // The row has already been committed; refresh cached lists in the background.
+      void refresh().catch(() => undefined);
       done(r);
     },
   });
