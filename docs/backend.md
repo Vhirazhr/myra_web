@@ -47,6 +47,6 @@ Untuk disaster recovery, aktifkan backup PostgreSQL atau PITR sesuai paket Supab
 
 ## Google AI configuration
 
-Simpan satu secret server-side bernama `GEMINI_API_KEY` dari Google AI Studio. Model default: `gemini-3.8-flash` untuk chat/memory/proactive/transcription, `gemini-3.8-live` untuk panggilan, dan `gemini-3.8-flash-tts` untuk voice note. Model dapat diubah lewat `GEMINI_CHAT_MODEL`, `GEMINI_LIVE_MODEL`, dan `GEMINI_TTS_MODEL` secrets. Jangan pernah menaruh key dalam `VITE_*` atau mengirimkannya ke browser.
+Simpan satu secret server-side bernama `GEMINI_API_KEY` dari Google AI Studio. Model default: `gemini-3.6-flash` untuk chat/memory/proactive/transcription, `gemini-3.8-live` untuk panggilan, dan `gemini-3.8-flash-tts` untuk voice note. Model dapat diubah lewat `GEMINI_CHAT_MODEL`, `GEMINI_LIVE_MODEL`, dan `GEMINI_TTS_MODEL` secrets. Jangan pernah menaruh key dalam `VITE_*` atau mengirimkannya ke browser.
 
 Foto dan video karakter dibuat melalui Google Flow dengan login Google AI Plus, lalu diunduh dan diimpor ke Character Media Studio. Flow tidak menyediakan API publik Google untuk memanggil langganan Plus secara langsung dari MYRA. MYRA dapat mengirim media yang sudah diimpor ke percakapan.
