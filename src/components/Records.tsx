@@ -91,9 +91,7 @@ export function Records({
       ? "universe-grid"
       : spec.table === "stories"
         ? "story-grid"
-        : spec.table === "providers"
-          ? "provider-grid"
-          : spec.table === "world_entries" && spec.fixed?.kind === "event"
+        : spec.table === "world_entries" && spec.fixed?.kind === "event"
             ? "timeline-list"
             : "record-list";
   const lookup = (id: string) =>
