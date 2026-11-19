@@ -36,8 +36,13 @@ export function endpoint(handler: (req: Request) => Promise<unknown>) {
       if (req.method !== "POST") throw new HttpError(405, "Use POST");
       return Response.json(await handler(req), { headers: cors });
     } catch (e) {
-      return Response.json({ error: e instanceof Error ? e.message : "Request failed" }, {
-        status: e instanceof HttpError ? e.status : 400,
+      const status = e instanceof HttpError ? e.status : 500;
+      const message = e instanceof Error ? e.message : "Request failed";
+      if (!(e instanceof HttpError)) {
+        console.error("[MYRA] Unhandled Edge Function error", message);
+      }
+      return Response.json({ error: message }, {
+        status,
         headers: cors,
       });
     }
