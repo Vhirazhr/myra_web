@@ -1,5 +1,5 @@
 import { backend, checked, endpoint, HttpError, required } from "../_shared/backend.ts";
-import { completion } from "../_shared/ai.ts";
+import { completion, processMemoryTasks } from "../_shared/ai.ts";
 const b64 = (s: Uint8Array) =>
   btoa(Array.from(s, (c) => String.fromCharCode(c)).join("")).replace(/=/g, "").replace(/\+/g, "-")
     .replace(/\//g, "_");
@@ -41,7 +41,8 @@ export const handler = endpoint(async (req) => {
   if (req.headers.get("Authorization") !== "Bearer " + required("MYRA_WORKER_TOKEN")) {
     throw new HttpError(401, "Worker authentication required");
   }
-  const db = backend(), now = new Date(), results = { activities: 0, initiatives: 0, delivered: 0 };
+  const db = backend(), now = new Date(), results = { activities: 0, initiatives: 0, delivered: 0, memories: 0 };
+  results.memories = await processMemoryTasks(db, 2);
   const prefs = checked(
     await db.from("settings").select("*").or("simulation.eq.true,proactive.eq.true"),
   );
