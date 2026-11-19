@@ -21,15 +21,15 @@ Semua tabel aplikasi di schema publik memakai RLS. Kunci asing komposit mengikat
 | Action di `myra` | `id` | Hasil |
 | --- | --- | --- |
 | `generate` | Pesan pengguna | Balasan personal atau grup dan memory persisten |
-| `test-provider` | Provider | Teks yang dihasilkan provider terpilih |
+| `test-google` | Tidak diperlukan | Uji koneksi Gemini memakai `GEMINI_API_KEY` server |
 | `summarize` | Percakapan | Ringkasan 32 pesan terbaru, disimpan pada scope percakapan |
 | `generate-story` | Karakter | Draft dengan caption dari model |
-| `voice-note` | Pesan asisten | Audio hasil TTS di bucket privat |
-| `transcribe` | Pesan audio | Transkrip tersimpan |
-| `call` | Karakter | Tambahkan SDP offer di properti `sdp`. Hasilnya SDP answer WebRTC dan ID catatan call |
+| `voice-note` | Pesan asisten | Audio Gemini TTS disimpan sebagai WAV di bucket privat |
+| `transcribe` | Pesan audio | Transkripsi Gemini tersimpan |
+| `live-token` | Karakter | Token Gemini Live sekali pakai, ID catatan call, dan model Live; instruksi karakter dikunci di backend |
 | `simulation` | Tidak diperlukan | Jumlah jadwal dan event yang dieksekusi untuk owner |
 
-Untuk panggilan, klien meminta izin mikrofon, membuat WebRTC offer, menerapkan answer, lalu mencatat status `connected` dari event transport. Jika provider menolak, backend menyimpan status `failed`. Halaman panggilan menampilkan riwayat tersebut. Gambar dalam chat dapat dikirim ke model multimodal melalui signed URL berumur pendek. Model dan provider harus mendukung input gambar.
+Untuk panggilan suara, backend membuat token Gemini Live sekali pakai dengan masa mulai satu menit dan masa sesi 30 menit. Token dibatasi ke model dan instruksi karakter; API key Google tidak pernah dikirim ke browser. Browser membuka WebSocket Live API dengan token sementara, mengirim audio PCM mikrofon, dan memutar audio PCM yang diterima. Status call dicatat di tabel `calls`. Voice note memakai Gemini TTS, sedangkan transkripsi memakai Gemini multimodal input. Gambar dalam chat dapat dikirim ke Gemini melalui signed URL berumur pendek.
 
 ## Aktifkan scheduler di Supabase Cloud
 
@@ -44,3 +44,9 @@ Untuk memeriksa scheduler, lihat `cron.job_run_details`, respons pg_net, dan log
 Snapshot aplikasi menyalin data domain milik akun dalam satu transaksi. Restore hanya memasukkan record dengan ID yang belum ada. Snapshot menyimpan referensi media. Objek Storage, akun Auth, token perangkat, secret, dan konfigurasi deployment dikelola terpisah.
 
 Untuk disaster recovery, aktifkan backup PostgreSQL atau PITR sesuai paket Supabase, dan buat salinan terpisah dari enam bucket privat melalui Supabase Storage S3 endpoint atau Storage API. Saat melakukan pemulihan penuh, pulihkan database dan object Storage dari waktu yang selaras. Restore ke proyek staging terlebih dahulu dan verifikasi signed URL, login, dan satu turn chat.
+
+## Google AI configuration
+
+Simpan satu secret server-side bernama `GEMINI_API_KEY` dari Google AI Studio. Model default: `gemini-3.8-flash` untuk chat/memory/proactive/transcription, `gemini-3.8-live` untuk panggilan, dan `gemini-3.8-flash-tts` untuk voice note. Model dapat diubah lewat `GEMINI_CHAT_MODEL`, `GEMINI_LIVE_MODEL`, dan `GEMINI_TTS_MODEL` secrets. Jangan pernah menaruh key dalam `VITE_*` atau mengirimkannya ke browser.
+
+Foto dan video karakter dibuat melalui Google Flow dengan login Google AI Plus, lalu diunduh dan diimpor ke Character Media Studio. Flow tidak menyediakan API publik Google untuk memanggil langganan Plus secara langsung dari MYRA. MYRA dapat mengirim media yang sudah diimpor ke percakapan.
