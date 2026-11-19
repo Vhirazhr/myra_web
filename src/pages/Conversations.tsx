@@ -334,128 +334,288 @@ function Thread({ id }: { id: string }) {
     </div>
   );
 }
+function resampleAudio(input: Float32Array, inputRate: number, outputRate: number) {
+  if (inputRate === outputRate) return input;
+  const ratio = inputRate / outputRate;
+  const length = Math.floor(input.length / ratio);
+  const output = new Float32Array(length);
+  for (let i = 0; i < length; i++) {
+    const start = Math.floor(i * ratio);
+    const end = Math.min(Math.floor((i + 1) * ratio), input.length);
+    let sum = 0;
+    for (let j = start; j < end; j++) sum += input[j];
+    output[i] = end > start ? sum / (end - start) : 0;
+  }
+  return output;
+}
+function bytesToBase64(bytes: Uint8Array) {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+function base64ToBytes(value: string) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
 export function CallStudio() {
   const chars = useRows("characters"),
     history = useRows("calls");
   const [id, select] = useState(""),
     [state, status] = useState("idle"),
     [err, fail] = useState(""),
-    [muted, mute] = useState(false);
-  const pc = useRef<RTCPeerConnection | null>(null),
-    stream = useRef<MediaStream | null>(null),
-    audio = useRef<HTMLAudioElement>(null),
+    [muted, mute] = useState(false),
+    [transcript, setTranscript] = useState("");
+  const socket = useRef<WebSocket | null>(null),
+    microphone = useRef<MediaStream | null>(null),
+    audioContext = useRef<AudioContext | null>(null),
+    inputSource = useRef<MediaStreamAudioSourceNode | null>(null),
+    processor = useRef<ScriptProcessorNode | null>(null),
     record = useRef(""),
     connected = useRef(false),
-    attempt = useRef(0);
+    attempt = useRef(0),
+    mutedRef = useRef(false),
+    nextPlaybackTime = useRef(0),
+    playing = useRef(new Set<AudioBufferSourceNode>());
+
   async function end(failed = false) {
     attempt.current++;
-    const connection = pc.current;
-    pc.current = null;
-    if (connection) {
-      connection.onconnectionstatechange = null;
-      connection.close();
+    const ws = socket.current;
+    socket.current = null;
+    if (ws) {
+      ws.onclose = null;
+      ws.onerror = null;
+      ws.onmessage = null;
+      if (ws.readyState < WebSocket.CLOSING) ws.close();
     }
-    stream.current?.getTracks().forEach((t) => t.stop());
-    stream.current = null;
+    processor.current?.disconnect();
+    processor.current = null;
+    inputSource.current?.disconnect();
+    inputSource.current = null;
+    microphone.current?.getTracks().forEach((track) => track.stop());
+    microphone.current = null;
+    for (const source of playing.current) {
+      try { source.stop(); } catch {}
+    }
+    playing.current.clear();
+    const context = audioContext.current;
+    audioContext.current = null;
+    if (context && context.state !== "closed") {
+      try { await context.close(); } catch {}
+    }
+    nextPlaybackTime.current = 0;
     const saved = record.current;
     record.current = "";
-    status("idle");
+    const wasConnected = connected.current;
+    connected.current = false;
+    mutedRef.current = false;
     mute(false);
+    status("idle");
     if (saved) {
       try {
         await save(
           "calls",
           {
-            state: failed || !connected.current ? "failed" : "ended",
+            state: failed || !wasConnected ? "failed" : "ended",
             ended_at: new Date().toISOString(),
           },
           saved,
         );
         await refresh();
-      } catch (e) {
-        fail(errorText(e));
+      } catch (error) {
+        fail(errorText(error));
       }
     }
   }
-  useEffect(
-    () => () => {
-      void end();
-    },
-    [],
-  );
+  useEffect(() => () => { void end(); }, []);
+
   async function start() {
     const current = ++attempt.current;
     status("connecting");
     fail("");
+    setTranscript("");
     connected.current = false;
+    mutedRef.current = false;
     try {
-      const media = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("Microphone access requires HTTPS or localhost.");
+      }
+      const media = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       if (current !== attempt.current) {
-        media.getTracks().forEach((t) => t.stop());
+        media.getTracks().forEach((track) => track.stop());
         return;
       }
-      stream.current = media;
-      const connection = new RTCPeerConnection();
-      pc.current = connection;
-      connection.ontrack = (e) => {
-        if (audio.current) {
-          audio.current.srcObject = e.streams[0];
-          void audio.current.play();
-        }
+      microphone.current = media;
+      const result = await call("live-token", { id });
+      if (current !== attempt.current) {
+        await save("calls", { state: "ended", ended_at: new Date().toISOString() }, result.id);
+        return;
+      }
+      record.current = result.id;
+      const context = new AudioContext();
+      audioContext.current = context;
+      await context.resume();
+      const wsUrl =
+        "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?access_token=" +
+        encodeURIComponent(result.token);
+      const ws = new WebSocket(wsUrl);
+      socket.current = ws;
+
+      const startMicrophoneStream = () => {
+        if (processor.current || !microphone.current || !audioContext.current) return;
+        const ctx = audioContext.current;
+        const source = ctx.createMediaStreamSource(microphone.current);
+        const node = ctx.createScriptProcessor(4096, 1, 1);
+        const silent = ctx.createGain();
+        silent.gain.value = 0;
+        node.onaudioprocess = (event) => {
+          if (mutedRef.current || ws.readyState !== WebSocket.OPEN) return;
+          const samples = resampleAudio(
+            event.inputBuffer.getChannelData(0),
+            ctx.sampleRate,
+            16000,
+          );
+          if (!samples.length) return;
+          const pcm = new Int16Array(samples.length);
+          for (let i = 0; i < samples.length; i++) {
+            const sample = Math.max(-1, Math.min(1, samples[i]));
+            pcm[i] = sample < 0 ? sample * 32768 : sample * 32767;
+          }
+          ws.send(JSON.stringify({
+            realtimeInput: {
+              audio: {
+                mimeType: "audio/pcm;rate=16000",
+                data: bytesToBase64(new Uint8Array(pcm.buffer)),
+              },
+            },
+          }));
+        };
+        source.connect(node);
+        node.connect(silent);
+        silent.connect(ctx.destination);
+        inputSource.current = source;
+        processor.current = node;
       };
-      media.getTracks().forEach((t) => connection.addTrack(t, media));
-      connection.createDataChannel("oai-events");
-      const offer = await connection.createOffer();
-      await connection.setLocalDescription(offer);
-      const res = await call("call", { id, sdp: offer.sdp });
-      if (current !== attempt.current) {
-        await save("calls", { state: "ended", ended_at: new Date().toISOString() }, res.id);
-        return;
-      }
-      record.current = res.id;
-      connection.onconnectionstatechange = async () => {
-        if (connection.connectionState === "connected") {
-          connected.current = true;
-          status("connected");
-          await save("calls", { state: "connected", started_at: new Date().toISOString() }, res.id);
-          await refresh();
-        }
-        if (
-          connection.connectionState === "failed" ||
-          connection.connectionState === "disconnected"
-        )
+
+      const playAudio = (encoded: string) => {
+        const ctx = audioContext.current;
+        if (!ctx) return;
+        const bytes = base64ToBytes(encoded);
+        const sampleCount = Math.floor(bytes.length / 2);
+        if (!sampleCount) return;
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const buffer = ctx.createBuffer(1, sampleCount, 24000);
+        const channel = buffer.getChannelData(0);
+        for (let i = 0; i < sampleCount; i++) channel[i] = view.getInt16(i * 2, true) / 32768;
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        const when = Math.max(ctx.currentTime + 0.015, nextPlaybackTime.current);
+        source.start(when);
+        nextPlaybackTime.current = when + buffer.duration;
+        playing.current.add(source);
+        source.onended = () => playing.current.delete(source);
+      };
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({
+          setup: {
+            model: "models/" + result.model,
+            ...result.config,
+          },
+        }));
+      };
+      ws.onmessage = async (event) => {
+        try {
+          const raw = typeof event.data === "string" ? event.data : await event.data.text();
+          const message = JSON.parse(raw);
+          if (message.error) {
+            throw new Error(message.error.message || "Gemini Live returned an error");
+          }
+          if (message.setupComplete) {
+            connected.current = true;
+            status("connected");
+            await save(
+              "calls",
+              { state: "connected", started_at: new Date().toISOString() },
+              result.id,
+            );
+            await refresh();
+            startMicrophoneStream();
+            ws.send(JSON.stringify({
+              clientContent: {
+                turns: [{
+                  role: "user",
+                  parts: [{ text: "Start this voice conversation with a natural, in-character greeting. Keep it warm and brief." }],
+                }],
+                turnComplete: true,
+              },
+            }));
+          }
+          const server = message.serverContent;
+          if (server?.interrupted) {
+            for (const source of playing.current) {
+              try { source.stop(); } catch {}
+            }
+            playing.current.clear();
+            nextPlaybackTime.current = 0;
+          }
+          const inputText = server?.inputTranscription?.text;
+          const outputText = server?.outputTranscription?.text;
+          if (inputText) setTranscript("You: " + inputText);
+          if (outputText) setTranscript("Character: " + outputText);
+          for (const part of server?.modelTurn?.parts || []) {
+            const audio = part.inlineData?.data || part.inline_data?.data;
+            if (audio) playAudio(audio);
+          }
+        } catch (error) {
+          fail(errorText(error));
           void end(true);
+        }
       };
-      await connection.setRemoteDescription({ type: "answer", sdp: res.sdp });
-    } catch (e) {
-      fail(errorText(e));
+      ws.onerror = () => {
+        fail("Gemini Live connection failed. Check the API key, Live API access, and network connection.");
+      };
+      ws.onclose = () => {
+        if (current === attempt.current && connected.current) void end(true);
+      };
+    } catch (error) {
+      fail(errorText(error));
       await end(true);
     }
   }
+
   return (
     <div className="page">
       <Heading
         section="Communication"
         title="Voice calls"
-        description="Start a live voice conversation with an AI character."
+        description="Talk to your character in real time with Gemini Live. The Google API key stays on the Supabase backend; the browser receives a short-lived session token."
       />
       <Card className="wizard-form">
         <label>
           Character
-          <select value={id} onChange={(e) => select(e.target.value)}>
+          <select value={id} onChange={(event) => select(event.target.value)} disabled={state !== "idle"}>
             <option value="">Select…</option>
-            {chars.data?.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
+            {chars.data?.map((character) => (
+              <option key={character.id} value={character.id}>{character.name}</option>
             ))}
           </select>
         </label>
-        <audio ref={audio} autoPlay />
         <div className="wizard-actions">
           {state === "idle" ? (
-            <Button disabled={!id} onClick={start}>
-              Start call
+            <Button disabled={!id} onClick={() => void start()}>
+              Start Gemini Live call
             </Button>
           ) : (
             <>
@@ -463,29 +623,29 @@ export function CallStudio() {
               <Button
                 secondary
                 onClick={() => {
-                  stream.current?.getAudioTracks().forEach((t) => (t.enabled = muted));
-                  mute(!muted);
+                  mutedRef.current = !mutedRef.current;
+                  mute(mutedRef.current);
                 }}
               >
-                {muted ? "Unmute" : "Mute"}
+                {muted ? "Unmute microphone" : "Mute microphone"}
               </Button>
               <Button onClick={() => void end()}>End call</Button>
             </>
           )}
         </div>
+        {transcript && <p className="media-notice">{transcript}</p>}
         {err && <p role="alert">{err}</p>}
       </Card>
       <Card className="wizard-form">
         <h2>Call history</h2>
         {!history.data?.length && <p>No calls recorded.</p>}
-        {history.data?.map((r) => (
-          <p key={r.id}>
-            {chars.data?.find((c) => c.id === r.character_id)?.name} · {r.state} ·{" "}
-            {new Date(r.created_at).toLocaleString()}
+        {history.data?.map((item) => (
+          <p key={item.id}>
+            {chars.data?.find((character) => character.id === item.character_id)?.name} · {item.state} ·{" "}
+            {new Date(item.created_at).toLocaleString()}
           </p>
         ))}
       </Card>
     </div>
   );
 }
-
