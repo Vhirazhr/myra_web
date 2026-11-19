@@ -1,4 +1,4 @@
-import { checked, type Context, required } from "./backend.ts";
+import { checked, HttpError, type Context, required } from "./backend.ts";
 type Turn = {
   role: "system" | "user" | "assistant";
   content:
@@ -78,6 +78,14 @@ export async function completion(
   let inputTokens: number | null = null;
   let outputTokens: number | null = null;
   let failure = "";
+  let failureStatus = 502;
+  const timeoutMs = operation === "conversation"
+    ? 85000
+    : operation === "memory extraction"
+    ? 8000
+    : operation === "initiative"
+    ? 25000
+    : 40000;
   try {
     const response = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/" +
@@ -88,7 +96,7 @@ export async function completion(
           "x-goog-api-key": apiKey,
           "Content-Type": "application/json",
         },
-        signal: AbortSignal.timeout(60000),
+        signal: AbortSignal.timeout(timeoutMs),
         body: JSON.stringify({
           systemInstruction: systemInstruction
             ? { parts: [{ text: systemInstruction.slice(0, 36000) }] }
@@ -104,8 +112,10 @@ export async function completion(
     );
     const payload = await response.json();
     if (!response.ok) {
-      throw new Error(
-        payload.error?.message || "Gemini API returned HTTP " + response.status,
+      const status = response.status;
+      throw new HttpError(
+        status === 429 ? 429 : status >= 500 ? 502 : status,
+        payload.error?.message || "Gemini API returned HTTP " + status,
       );
     }
     answer = (payload.candidates?.[0]?.content?.parts || [])
@@ -119,7 +129,28 @@ export async function completion(
     inputTokens = payload.usageMetadata?.promptTokenCount ?? null;
     outputTokens = payload.usageMetadata?.candidatesTokenCount ?? null;
   } catch (error) {
-    failure = error instanceof Error ? error.message : "Gemini API unavailable";
+    if (error instanceof HttpError) {
+      failure = error.message;
+      failureStatus = error.status;
+    } else if (
+      error instanceof Error &&
+      (error.name === "TimeoutError" || error.name === "AbortError")
+    ) {
+      failure = "Gemini " + operation + " request timed out after " +
+        Math.round(timeoutMs / 1000) + " seconds.";
+      failureStatus = 504;
+    } else {
+      failure = error instanceof Error ? error.message : "Gemini API unavailable";
+      failureStatus = 502;
+    }
+  }
+  if (failure) {
+    console.error("[MYRA] Gemini request failed", {
+      operation,
+      model,
+      status: failureStatus,
+      error: failure,
+    });
   }
   checked(
     await ctx.service.from("usage_logs").insert({
@@ -133,7 +164,7 @@ export async function completion(
       error: failure,
     }),
   );
-  if (failure) throw new Error(failure);
+  if (failure) throw new HttpError(failureStatus, failure);
   return answer;
 }
 export async function generate(ctx: Context, sourceId: string) {
