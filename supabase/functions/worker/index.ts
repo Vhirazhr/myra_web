@@ -42,7 +42,7 @@ export const handler = endpoint(async (req) => {
     throw new HttpError(401, "Worker authentication required");
   }
   const db = backend(), now = new Date(), results = { activities: 0, initiatives: 0, delivered: 0, memories: 0 };
-  results.memories = await processMemoryTasks(db, 2);
+  results.memories = await processMemoryTasks(db, 1);
   const prefs = checked(
     await db.from("settings").select("*").or("simulation.eq.true,proactive.eq.true"),
   );
