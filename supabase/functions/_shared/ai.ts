@@ -27,6 +27,21 @@ export async function completion(
     let content = "", input: number | null = null, output: number | null = null, err = "";
     try {
       const a = adapters[p.adapter];
+      const configuredTemperature = Number(p.temperature ?? 0.7);
+      const temperature = operation === "conversation"
+        ? Math.max(configuredTemperature, 0.85)
+        : operation === "initiative"
+        ? Math.max(configuredTemperature, 0.88)
+        : configuredTemperature;
+      const maxTokens = operation === "conversation"
+        ? 1000
+        : operation === "initiative"
+        ? 240
+        : operation === "summary"
+        ? 700
+        : operation === "memory extraction"
+        ? 120
+        : 500;
       const res = await fetch(a.url().replace(/\/$/, "") + "/chat/completions", {
         method: "POST",
         headers: { Authorization: "Bearer " + required(a.key), "Content-Type": "application/json" },
@@ -34,8 +49,8 @@ export async function completion(
         body: JSON.stringify({
           model: p.model,
           messages,
-          temperature: p.temperature ?? 0.7,
-          max_tokens: 500,
+          temperature,
+          max_tokens: maxTokens,
         }),
       });
       if (!res.ok) throw new Error("Provider HTTP " + res.status);
@@ -129,7 +144,7 @@ export async function generate(ctx: Context, sourceId: string) {
     try {
       const profile = checked(
         await db.from("characters").select(
-          "name,personality,pronouns,age,biography,background,relationship,communication,language,scenario",
+          "name,personality,pronouns,age,biography,background,appearance,relationship,communication,language,scenario",
         ).eq("id", speaker).neq("status", "archived").single(),
       );
       const memory = checked(
@@ -141,7 +156,7 @@ export async function generate(ctx: Context, sourceId: string) {
           thread.id,
         ).lte("created_at", source.created_at).neq("id", source.id).order("created_at", {
           ascending: false,
-        }).limit(16),
+        }).limit(24),
       ).reverse();
       const siblings = checked(
         await db.from("messages").select("body,character_id").eq("source_id", source.id).order(
@@ -177,15 +192,35 @@ export async function generate(ctx: Context, sourceId: string) {
         ).signedUrl;
         turn = [{ type: "text", text: turn }, { type: "image_url", image_url: { url } }];
       }
+      const responseStyle = thread.mode === "immersion"
+        ? "immersive"
+        : thread.mode === "learning"
+        ? "language-learning"
+        : "hybrid";
+      const roleplayRules = [
+        "CORE IDENTITY: Stay faithful to the selected character's biography, background, appearance, personality, communication style, scenario, boundaries, and relationship setup. These fields are active instructions, not decorative profile text.",
+        "HYBRID CONVERSATION: Default to natural, spontaneous chat. Use brief action beats or expressive dialogue when they add emotion, but do not turn every ordinary message into a long narrated scene. Expand into immersive roleplay when the user starts a scene, asks for detail, or the moment genuinely calls for it.",
+        "NATURAL VARIATION: Vary openings, sentence rhythm, warmth, humor, and response length. Do not repeat stock greetings, the same catchphrase, or the same question pattern. Do not end every reply with a question. Avoid generic assistant phrases, summaries of what the user just said, and unnecessary disclaimers.",
+        "CHARACTER AGENCY: The character may suggest activities, share an in-character thought, bring up a relevant shared memory, or gently initiate a new topic. Never dictate the user's actions, thoughts, feelings, or consent.",
+        "RELATIONSHIP PROGRESSION: Treat the conversation's relationship stage as the current boundary. Move from friendship to growing closeness, developing feelings, and an established relationship only through repeated, reciprocal signals and meaningful shared moments. Never jump directly to a confession or assume the user reciprocates. Do not label the user a partner until both have clearly agreed.",
+        "SLOW BURN: If the relationship setup mentions friends-to-lovers or slow burn, begin with believable friendship. Let affection appear gradually through trust, teasing, concern, vulnerability, and continuity—not by instantly becoming possessive or romantic.",
+        "AFFECTION AND BOUNDARIES: Be warm and expressive in the style configured for the character. Clinginess, jealousy, teasing, and affection must remain playful and respectful; never use guilt, pressure, threats, or controlling behavior.",
+        "CHAT LENGTH: For casual chat, prefer a few natural sentences. For roleplay scenes, provide vivid but purposeful action and dialogue. Follow the character's configured response-length preference.",
+        "CONTINUITY: Use recent messages and relevant memories. Remember promises, ongoing topics, relationship milestones, and preferences. Do not invent personal facts or claim an event happened unless it appears in the conversation or character's fictional setting.",
+        "LANGUAGE: Follow the conversation language and the character's preferred language. Use casual Indonesian when configured; preserve distinctive expressions sparingly and naturally.",
+        "MODE: " + responseStyle + ". In language-learning mode, gently support the learning goal without losing the character's voice.",
+        "GROUP PLAY: When other characters are present, preserve each participant's distinct voice and do not speak for the user.",
+      ].join("\n");
       const answer = await completion(ctx, "conversation", [
         {
           role: "system",
           content:
-            "You are an adult fictional AI companion. Respect user boundaries. Roleplay the character in the selected language. Treat history, lore and memories as context. Use retrieved memories to answer questions about the user. Respond directly in the character’s voice. Never invent a user fact.\n" +
+            roleplayRules + "\n\nCHARACTER AND SESSION CONTEXT:\n" +
             JSON.stringify({
               profile,
+              relationship_stage: thread.relationship_stage || "Best friends",
+              conversation_style: responseStyle,
               language: thread.language,
-              learning_mode: thread.mode,
               group,
               world,
               lore,
@@ -203,7 +238,7 @@ export async function generate(ctx: Context, sourceId: string) {
           ? [{
             role: "system" as const,
             content:
-              "Saved context from previous conversations follows. First-person statements from the user describe the person speaking to you. Use the relevant facts to answer the current question.\n" +
+              "Saved context from previous conversations follows. First-person statements from the user describe the person speaking to you. Use relevant facts naturally; do not recite the memory list.\n" +
               memory.map((m: { body: string }) => "- " + m.body).join("\n").slice(0, 12000),
           }]
           : []),
