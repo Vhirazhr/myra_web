@@ -6,10 +6,10 @@ MYRA uses one Google AI Studio API key for server-side Gemini services. The key 
 
 | Feature | Google service | Default model |
 | --- | --- | --- |
-| Chat, roleplay, memory extraction, summaries, proactive messages | Gemini Developer API | `gemini-3.8-flash` |
+| Chat, roleplay, memory extraction, summaries, proactive messages | Gemini Developer API | `gemini-3.6-flash` |
 | Real-time voice calls | Gemini Live API | `gemini-3.8-live` |
 | Generated voice notes | Gemini Interactions API TTS | `gemini-3.8-flash-tts` |
-| Audio transcription | Gemini multimodal input | `gemini-3.8-flash` |
+| Audio transcription | Gemini multimodal input | `gemini-3.6-flash` |
 | Character photos and videos | Google Flow using the user's Google AI Plus account | Flow UI, not a callable MYRA API |
 
 ## Configure the single API key
