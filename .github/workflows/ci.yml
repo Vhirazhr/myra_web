@@ -27,5 +27,11 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm typecheck
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check Supabase Edge Functions
+        run: deno check --no-lock --node-modules-dir=none supabase/functions/myra/index.ts supabase/functions/worker/index.ts
       - name: Build
         run: pnpm build
