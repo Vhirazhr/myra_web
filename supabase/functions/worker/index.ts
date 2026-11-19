@@ -69,15 +69,18 @@ export const handler = endpoint(async (req) => {
       ).order("last_proactive_at", { nullsFirst: true }).limit(4),
     );
     for (const t of threads) {
-      const last = checked(
-        await db.from("messages").select("body,created_at").eq("conversation_id", t.id).order(
-          "created_at",
-          { ascending: false },
-        ).limit(1),
-      )[0];
+      const recent = checked(
+        await db.from("messages").select("role,body,created_at,is_proactive").eq(
+          "conversation_id",
+          t.id,
+        ).order("created_at", { ascending: false }).limit(12),
+      ).reverse();
+      const last = recent[recent.length - 1];
+      // Do not cold-message an empty thread or send another nudge before the user replies.
+      if (!last || last.is_proactive || !recent.some((m) => m.role === "user")) continue;
       const since = Math.max(
         Date.parse(t.last_proactive_at || t.created_at),
-        Date.parse(last?.created_at || t.created_at),
+        Date.parse(last.created_at || t.created_at),
       );
       if (now.getTime() - since < p.frequency_hours * 3600000) continue;
       const job = "initiative/" + t.id + "/" + since,
@@ -85,10 +88,9 @@ export const handler = endpoint(async (req) => {
       if (!token) continue;
       try {
         const speaker = checked(
-          await db.from("characters").select("name,personality,biography,status").eq(
-            "id",
-            t.character_id,
-          ).single(),
+          await db.from("characters").select(
+            "name,personality,pronouns,age,biography,background,appearance,relationship,communication,language,scenario,status",
+          ).eq("id", t.character_id).single(),
         );
         if (speaker.status === "archived") {
           await db.rpc("release_ai_job", { actor, job, token });
@@ -98,17 +100,36 @@ export const handler = endpoint(async (req) => {
           await db.rpc("recall_memories", {
             thread: t.id,
             speaker: t.character_id,
-            query_text: last?.body || "",
+            query_text: last.body || "",
           }),
         );
         const body = await completion({ db, service: db, actor }, "initiative", [{
           role: "system",
-          content:
-            "Write one natural check-in as this fictional character. Respect quiet boundaries and use the chosen language.",
+          content: [
+            "You are writing the character's first message in an existing one-to-one conversation.",
+            "Stay fully in the character's configured voice, language, personality, background, communication style, scenario, and relationship setup.",
+            "Use hybrid companion style: sound like a real spontaneous chat message, not a long story narration. A tiny action beat is fine if it feels natural.",
+            "Start with a specific, fresh reason to reach out or naturally continue a shared topic. Use recent chat and memories when relevant; never pretend the user said something they did not say.",
+            "Vary the opening. Do not repeat recent greetings, generic 'how are you?' check-ins, or the same catchphrase. Do not mention automation, schedules, prompts, or being an AI.",
+            "Be warm and expressive without guilt, pressure, possessiveness, or demands for an immediate reply. Respect quiet hours and the user's independence.",
+            "Respect the current relationship stage. If it is Best friends or the setup is friends-to-lovers/slow-burn, initiate as a close friend; use only subtle affection when supported by reciprocal history. Never force a confession or assume the user is a partner.",
+            "Send one concise message, usually 1-3 sentences, that gives the user an easy and natural opening to respond. Do not add a label or stage metadata.",
+          ].join("\n"),
         }, {
           role: "user",
-          content: JSON.stringify({ speaker, language: t.language, recent: last?.body, memories })
-            .slice(0, 15000),
+          content: JSON.stringify({
+            character: speaker,
+            relationship_stage: t.relationship_stage || "Best friends",
+            conversation_style: t.mode || "hybrid",
+            language: t.language,
+            local_time: local,
+            recent_messages: recent.map((m) => ({
+              role: m.role,
+              body: m.body,
+              created_at: m.created_at,
+            })),
+            memories: memories.map((m: { body: string }) => m.body),
+          }).slice(0, 18000),
         }]);
         checked(
           await db.rpc("finish_initiative", {
