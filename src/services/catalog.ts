@@ -96,7 +96,7 @@ export const group: Spec = {
   fields: [
     text("name", "Group name", true),
     area("description", "Group description"),
-    choose("mode", "Conversation mode", ["Natural Chat", "Cinematic Roleplay", "Hybrid"]),
+    choose("mode", "Conversation mode", ["Hybrid", "Natural Chat", "Cinematic Roleplay"]),
     roster,
   ],
 };
@@ -120,7 +120,7 @@ export const provider: Spec = {
     choose("adapter", "Provider type", ["openrouter", "openai", "compatible"]),
     text("model", "Model ID", true),
     number("priority", "Fallback priority", 1, 1, 50),
-    number("temperature", "Temperature", 0.7, 0, 2, "0.1"),
+    number("temperature", "Temperature", 0.85, 0, 2, "0.1"),
     number("input_price", "Input USD per million tokens", 0, 0, 10000, "any"),
     number("output_price", "Output USD per million tokens", 0, 0, 10000, "any"),
     { key: "enabled", label: "Enabled", type: "check", initial: true },
@@ -137,7 +137,13 @@ export const conversation: Spec = {
     ref("universe_id", "Universe context", "universes", false),
     ref("crossover_id", "Crossover context", "crossovers", false),
     { ...text("language", "Language", true), initial: "Indonesian" },
-    choose("mode", "Language mode", ["natural", "learning", "immersion"]),
+    choose("mode", "Conversation style", ["hybrid", "natural", "learning", "immersion"]),
+    choose("relationship_stage", "Relationship stage", [
+      "Best friends",
+      "Growing closer",
+      "Developing feelings",
+      "Romantic partners",
+    ]),
     { key: "proactive", label: "Allow character-initiated messages", type: "check" },
   ],
 };
