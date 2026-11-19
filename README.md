@@ -17,20 +17,21 @@ values ('<UUID akun dari Authentication>'::uuid)
 on conflict do nothing;
 ```
 
-5. Buat API key provider AI yang ingin digunakan. Gemini tetap tersedia sebagai provider khusus voice dan fallback. Untuk chat multi-provider, buka **AI Engine → Multi-AI Providers**, tambahkan model dan prioritas, lalu simpan nilai API key hanya sebagai Supabase Edge Function Secret (lihat [panduan Multi-AI](docs/google-ai-engine.md)). Buat satu API key di [Google AI Studio](https://aistudio.google.com/apikey), lalu simpan hanya sebagai Supabase Edge Function Secret:
+5. Buat API key Gemini di [Google AI Studio](https://aistudio.google.com/apikey) dan simpan sebagai Supabase Edge Function Secret:
    ```sh
    pnpm exec supabase secrets set GEMINI_API_KEY=YOUR_GOOGLE_AI_STUDIO_KEY
    ```
-   MYRA memakai `gemini-3.6-flash` untuk chat dan memori, `gemini-3.8-live` untuk voice call, serta `gemini-3.8-flash-tts` untuk voice note. Model default dapat diubah melalui `GEMINI_CHAT_MODEL`, `GEMINI_LIVE_MODEL`, dan `GEMINI_TTS_MODEL`. Buka **Google AI Engine** dan pilih **Test Gemini connection**.
+   Gemini dipakai untuk voice call, voice note, transkripsi, dan sebagai fallback teks bila belum ada provider Gemini yang dikonfigurasi. Chat, ringkasan, story caption, memory extraction, dan proactive text memakai automatic multi-provider routing. Buka **AI Engine → Multi-AI Providers**, tambahkan template, isi model ID, atur prioritas, lalu aktifkan provider setelah secret API key tersedia. Provider yang didukung: Gemini, OpenRouter, OpenAI, Anthropic, DeepSeek, Groq, Mistral, dan xAI. Lihat [panduan Multi-AI](docs/google-ai-engine.md) untuk semua secret, base URL, dan langkah pengujian.
 6. Hubungkan branch yang sudah direview ke Vercel dengan preset Vite, perintah `pnpm build`, dan direktori output `dist`. Setelah env frontend disimpan, buat deployment baru. Buka domain admin dan masuk memakai akun yang diprovisikan.
 
 | Fitur | Secret di server |
 | --- | --- |
-| Gemini chat, memory, proactive, TTS, transcription, Live token | `GEMINI_API_KEY` (satu key) |
+| Gemini voice, transcription, Live token, optional text fallback | `GEMINI_API_KEY` |
+| Multi-AI text routing | `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, plus compatible provider secrets as configured |
 | Pekerja terjadwal | `MYRA_WORKER_TOKEN` acak, minimal 32 karakter |
 | Push Android | `FIREBASE_SERVICE_ACCOUNT_JSON` dengan akses kirim FCM ke proyek aplikasi |
 
-Jangan gunakan prefiks `VITE_` untuk Gemini API key. Kunci hanya disimpan di Edge Function Secrets; browser menerima token Live berumur pendek, bukan API key. Foto dan video karakter tetap memakai Google Flow melalui alur manual: salin prompt, buat media di Flow dengan akun Google AI Plus, unduh, lalu impor melalui Character Media Studio.
+Jangan gunakan prefiks `VITE_` untuk API key AI. Semua kunci hanya disimpan di Edge Function Secrets; browser menerima token Live berumur pendek, bukan API key. Foto dan video karakter tetap memakai Google Flow melalui alur manual: salin prompt, buat media di Flow dengan akun Google AI Plus, unduh, lalu impor melalui Character Media Studio.
 
 ## Jalankan dan uji
 
