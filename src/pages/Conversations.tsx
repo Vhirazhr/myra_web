@@ -585,9 +585,10 @@ export function CallStudio() {
       };
       ws.onerror = () => {
         fail("Gemini Live connection failed. Check the API key, Live API access, and network connection.");
+        if (current === attempt.current) void end(true);
       };
       ws.onclose = () => {
-        if (current === attempt.current && connected.current) void end(true);
+        if (current === attempt.current) void end(true);
       };
     } catch (error) {
       fail(errorText(error));
