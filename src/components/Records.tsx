@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Button, Card, Modal, Icon } from "./ui";
 import { Editor } from "./Editor";
 import { displayName } from "../services/catalog";
-import { call, errorText, refresh, remove, save, useRows, useSigned } from "../services/workspace";
+import { errorText, refresh, remove, save, useRows, useSigned } from "../services/workspace";
 import type { Row, Spec } from "../types/workspace";
 export function Heading({
   section,
@@ -78,8 +78,7 @@ export function Records({
     worlds = useRows("universes"),
     groups = useRows("groups");
   const cast = useRows("universe_characters", {}, ["universes", "characters"].includes(spec.table)),
-    members = useRows("group_members", {}, spec.table === "groups"),
-    health = useRows("usage_logs", {}, spec.table === "providers");
+    members = useRows("group_members", {}, spec.table === "groups");
   const [worldFilter, setWorld] = useState("");
   const worldNames = (id: string) =>
     (cast.data || [])
@@ -281,18 +280,6 @@ export function Records({
                         {members.data?.filter((m) => m.group_id === r.id).length || 0} members
                       </small>
                     )}
-                    {spec.table === "providers" && (
-                      <small>
-                        {(() => {
-                          const last = health.data?.find((l) => l.provider_id === r.id);
-                          return last
-                            ? (last.error || "Last request succeeded") +
-                                " · " +
-                                new Date(last.created_at).toLocaleString()
-                            : "Not tested yet";
-                        })()}
-                      </small>
-                    )}
                     {(r.description || r.caption || r.history) && (
                       <p>{r.description || r.caption || r.history}</p>
                     )}
@@ -300,20 +287,6 @@ export function Records({
                 </div>
                 <div className="row-actions">
                   {actions?.(r)}
-                  {spec.table === "providers" && (
-                    <Button
-                      secondary
-                      disabled={mutate.isPending}
-                      onClick={() =>
-                        mutate.mutate(async () => {
-                          const v = await call("test-provider", { id: r.id });
-                          notify(v.text);
-                        })
-                      }
-                    >
-                      Test connection
-                    </Button>
-                  )}
                   {spec.table === "characters" && (
                     <>
                       <button
