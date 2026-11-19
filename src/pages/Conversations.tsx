@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button, Card, Badge, Modal } from "../components/ui";
 import { Heading, Media, Records } from "../components/Records";
+import { FilePicker } from "../components/Editor";
 import { Editor } from "../components/Editor";
 import { conversation } from "../services/catalog";
 import {
@@ -60,8 +61,7 @@ function Thread({ id }: { id: string }) {
     [recording, setRecording] = useState(false),
     [recordError, setRecordError] = useState("");
   const messages = useHistory(id, search);
-  const recorder = useRef<MediaRecorder | null>(null),
-    input = useRef<HTMLInputElement>(null);
+  const recorder = useRef<MediaRecorder | null>(null);
   useEffect(
     () => () => {
       const r = recorder.current;
@@ -105,7 +105,6 @@ function Thread({ id }: { id: string }) {
     setReply(null);
     setFile(null);
     mention([]);
-    if (input.current) input.current.value = "";
     await refresh();
     await call("generate", { id: message.id });
   }
@@ -352,12 +351,13 @@ function Thread({ id }: { id: string }) {
               placeholder="Write a message…" />
           </label>
           <div className="wizard-actions">
-            <input
-              aria-label="Message attachment"
-              ref={input}
-              type="file"
+            <FilePicker
+              label="Message attachment"
+              bucket="conversation-media"
               accept="image/*,audio/*,video/*"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              file={file}
+              onChange={setFile}
+              hint="Images, audio or video · Max 50 MB"
             />
             <Button secondary disabled={action.isPending} onClick={record}>
               {recording ? "Stop recording" : "Record audio"}
@@ -366,13 +366,6 @@ function Thread({ id }: { id: string }) {
               {action.isPending ? "Working…" : "Send"}
             </Button>
           </div>
-          {file && <div className="attachment-chip">
-            <Badge>{file.name}</Badge>
-            <button type="button" aria-label="Remove attachment" onClick={() => {
-              setFile(null);
-              if (input.current) input.current.value = "";
-            }}>Remove</button>
-          </div>}
           {(action.error || recordError) && (
             <p className="form-error" role="alert">
               {action.error ? errorText(action.error) : recordError}

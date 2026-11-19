@@ -64,7 +64,9 @@ export function FilePicker({
   const maxSizeMb = bucket === "character-avatars" ? 10 : 50;
   const mime = file?.type || existingMime;
   const isVideo = mime.startsWith("video/");
-  const isImage = !isVideo && (mime.startsWith("image/") || accept.toLowerCase().includes("image/"));
+  const accepted = accept.toLowerCase();
+  const isImage = mime.startsWith("image/") ||
+    (!mime && accepted.includes("image/") && !accepted.includes("video/") && !accepted.includes("audio/"));
   const preview = previewUrl || saved.data || "";
 
   function choose(candidate?: File) {
@@ -125,7 +127,7 @@ export function FilePicker({
             ) : preview && isVideo ? (
               <video src={preview} muted playsInline preload="metadata" />
             ) : (
-              <Icon name="image" size={27} />
+              <Icon name={mime.startsWith("audio/") ? "mic" : "image"} size={27} />
             )}
           </span>
           <span className="file-picker-copy">

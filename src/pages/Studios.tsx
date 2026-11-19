@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Button, Card, Modal, Badge, Icon, type IconName } from "../components/ui";
 import { Records, Media, Heading } from "../components/Records";
-import { Editor } from "../components/Editor";
+import { Editor, FilePicker } from "../components/Editor";
 import { character, preferences, story, relationship, aiProvider } from "../services/catalog";
 import {
   call,
@@ -837,6 +837,10 @@ export function Library({ page }: { page: string }) {
     page === "gallery" ? asset.bucket === "character-gallery" :
       filterBucket === "all" || asset.bucket === filterBucket,
   );
+  const targetBucket = page === "gallery" ? "character-gallery" : bucket;
+  const acceptedMedia = ["character-gallery", "character-avatars", "universe-covers"].includes(targetBucket)
+    ? "image/*"
+    : targetBucket === "voice-media" ? "audio/*" : "image/*,audio/*,video/*";
   return (
     <div className="page">
       <Heading section="Stories & Media" title={page === "gallery" ? "Gallery manager" : "Media library"}
@@ -850,10 +854,18 @@ export function Library({ page }: { page: string }) {
               {buckets.map((name) => <option key={name}>{name}</option>)}
             </select>
           </label>}
-          <label>Media file
-            <input key={file?.name || "empty"} type="file" accept="image/*,audio/*,video/*"
-              onChange={(event) => choose(event.target.files?.[0] || null)} />
-          </label>
+          <FilePicker
+            label="Media file"
+            bucket={targetBucket}
+            accept={acceptedMedia}
+            file={file}
+            onChange={choose}
+            hint={targetBucket === "voice-media"
+              ? "Audio files · Max 50 MB"
+              : acceptedMedia === "image/*"
+                ? "PNG, JPG or WEBP · Max " + (targetBucket === "character-avatars" ? "10" : "50") + " MB"
+                : "Images, audio or video · Max 50 MB"}
+          />
           <Button type="submit" disabled={!file || add.isPending}>
             {add.isPending ? "Uploading…" : "Upload " + (page === "gallery" ? "image" : "to library")}
           </Button>
