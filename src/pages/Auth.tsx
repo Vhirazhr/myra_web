@@ -113,7 +113,8 @@ export function Auth({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
-                  <button type="button" aria-label="Show password" onClick={() => toggle(!show)}>
+                  <button type="button" aria-label={show ? "Hide password" : "Show password"}
+                    aria-pressed={show} onClick={() => toggle(!show)}>
                     <Icon name="eye" />
                   </button>
                 </div>
