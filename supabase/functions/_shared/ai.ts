@@ -268,8 +268,11 @@ export async function generate(ctx: Context, sourceId: string) {
           .filter((asset) => wantsVideo ? asset.mime.startsWith("video/") : asset.mime.startsWith("image/"))
           .map((asset) => {
             const searchable = [asset.name, asset.description, ...(asset.tags || [])].join(" ").toLowerCase();
-            const words = requestText.split(/[^a-z0-9]+/).filter((word) => word.length > 3);
-            const score = words.reduce((total, word) => total + (searchable.includes(word) ? 2 : 0), 0);
+            const words: string[] = requestText.split(/[^a-z0-9]+/).filter((word: string) => word.length > 3);
+            const score = words.reduce(
+              (total: number, word: string) => total + (searchable.includes(word) ? 2 : 0),
+              0,
+            );
             return { asset, score };
           })
           .sort((a, b) => b.score - a.score)[0]?.asset || null;
