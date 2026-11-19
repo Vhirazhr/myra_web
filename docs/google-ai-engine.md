@@ -75,3 +75,35 @@ Gemini remains the primary provider for chat, image/video workflows, and voice. 
 GPT is reserved as a text-only fallback. It must not receive image/video generation or voice requests. ChatGPT Plus plan usage is not currently wired into this remote-hosted, private MYRA deployment: OpenAI's published token-sharing path is for open-source and locally hosted tools, while remotely hosted apps must request access through the official partner interest process. Do not use browser cookies, copied ChatGPT sessions, or account passwords as a substitute. Enable GPT fallback only after OpenAI grants the required access and the official OAuth/token-sharing flow is implemented.
 
 Mobile and web clients continue to use the same Supabase conversations and messages; the AI provider is selected server-side and does not create separate chat histories.
+
+
+## Multi-provider text routing
+
+MYRA routes text generation through \`supabase/functions/_shared/ai-providers.ts\`. Configure provider rows in **AI Engine → Multi-AI Providers**. Lower priority numbers are attempted first. If a provider fails before producing output, the next enabled provider is attempted. A partial streamed response is never silently restarted on another model, preventing duplicate or contradictory text in the same assistant message.
+
+Supported adapters:
+- \`gemini\`: Google Gemini Developer API.
+- \`openai\`: OpenAI Chat Completions API.
+- \`anthropic\`: Anthropic Messages API.
+- \`openrouter\`: OpenRouter Chat Completions API.
+- \`compatible\`: approved OpenAI-compatible API hosts (DeepSeek, Groq, Mistral, xAI, Together, Fireworks, Cerebras, Perplexity, SambaNova, Nebius, SiliconFlow, Moonshot, MiniMax, Novita, Hyperbolic).
+
+Only store the secret variable name in the provider row, never the API key. Set actual key values with Supabase Edge Function Secrets. Supported secret names include:
+
+\`\`\`sh
+pnpm exec supabase secrets set OPENROUTER_API_KEY=...
+pnpm exec supabase secrets set OPENAI_API_KEY=...
+pnpm exec supabase secrets set ANTHROPIC_API_KEY=...
+pnpm exec supabase secrets set DEEPSEEK_API_KEY=...
+pnpm exec supabase secrets set GROQ_API_KEY=...
+pnpm exec supabase secrets set MISTRAL_API_KEY=...
+pnpm exec supabase secrets set XAI_API_KEY=...
+pnpm exec supabase secrets set TOGETHER_API_KEY=...
+pnpm exec supabase secrets set FIREWORKS_API_KEY=...
+\`\`\`
+
+For a compatible adapter, set the base URL to the provider's official HTTPS API root and select the matching secret variable name. The backend enforces an allowlist of hostnames to prevent arbitrary server-side requests. Do not paste API keys into the dashboard, provider name, model, base URL, or Git repository.
+
+Chat, summaries, story captions, memory extraction, and proactive text messages use the shared provider router. Voice calls, voice note generation, and transcription remain on their specialized Gemini endpoints in this phase. Google Flow media generation remains a manual workflow and is not treated as a callable API. Provider usage and estimated cost are recorded per request when token usage and price settings are available.
+
+Before enabling a provider, configure its API key in Supabase, add a provider row, choose its model ID, set priority, then test it by sending a normal MYRA chat message. A missing key or unsupported model will be recorded as a provider failure and the next eligible provider will be tried.
