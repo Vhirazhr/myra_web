@@ -28,7 +28,8 @@ const items = nav.flatMap((g) =>
 function Page({ page }: { page: string }) {
   const navigate = useNavigate(),
     item = items.find((i) => i.id === page);
-  if (["dashboard", "analytics", "usage"].includes(page)) return <Dashboard page={page} />;
+  if (page === "analytics" || page === "logs" || page === "storage" || page === "voice-notes") return <Navigate replace to={page === "analytics" ? "/dashboard" : page === "logs" ? "/chat" : page === "storage" ? "/media" : "/voice"} />;
+  if (["dashboard", "usage"].includes(page)) return <Dashboard page={page} />;
   if (["character-new", "universe-new"].includes(page)) {
     const spec = page === "character-new" ? character : universe;
     return (
