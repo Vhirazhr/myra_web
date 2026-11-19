@@ -55,7 +55,7 @@ export async function call(action: string, data: Record<string, unknown> = {}) {
   }
   return r.data;
 }
-export async function upload(bucket: string, file: File) {
+export async function upload(\n  bucket: string,\n  file: File,\n  metadata: { characterId?: string; description?: string; tags?: string[]; generationPrompt?: string; origin?: string } = {},\n) {
   const {
     data: { user },
     error,
