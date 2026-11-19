@@ -62,11 +62,8 @@ export function CharacterMediaStudio() {
   const [caption, setCaption] = useState("");
   const [notice, setNotice] = useState("");
   const character = characters.data?.find((item) => item.id === characterId) || characters.data?.[0];
-  const assets = useRows(
-    "media_assets",
-    { character_id: character?.id || "" },
-    !!character?.id,
-  );
+  const assets = useRows("media_assets", { character_id: character?.id || "" }, !!character?.id);
+  const characterAssets = (assets.data || []).filter((asset) => asset.bucket === "stories");
   const relatedConversations = useMemo(
     () =>
       conversations.data?.filter(
@@ -119,9 +116,9 @@ export function CharacterMediaStudio() {
     mutationFn: async () => {
       if (!character) throw new Error("Create a character first.");
       if (!file) throw new Error("Choose an image or video exported from Google Flow.");
-      if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) {
-        throw new Error("Only image and video files are supported here.");
-      }
+      const allowedTypes = ["image/png","image/jpeg","image/webp","image/gif","video/mp4","video/webm"];
+      if (!allowedTypes.includes(file.type)) throw new Error("Use PNG, JPG, WEBP, GIF, MP4 or WEBM files.");
+      if (file.size > 50 * 1024 * 1024) throw new Error("The file must be 50 MB or smaller.");
       return upload("stories", file, {
         characterId: character.id,
         description: description.trim(),
@@ -155,10 +152,12 @@ export function CharacterMediaStudio() {
 
   const remove = useMutation({
     mutationFn: async (asset: Row) => {
-      if (!window.confirm("Delete this media file permanently?")) return;
+      if (!window.confirm("Delete this media file permanently?")) return false;
       await discardAsset(asset);
+      return true;
     },
-    onSuccess: async () => {
+    onSuccess: async (deleted) => {
+      if (!deleted) return;
       setNotice("Media deleted.");
       await refresh();
     },
@@ -244,13 +243,7 @@ export function CharacterMediaStudio() {
             <textarea className="media-prompt" rows={11} readOnly value={prompt} />
           </label>
           <div className="wizard-actions">
-            <Button onClick={() => void copyPrompt()}>Copy prompt</Button>
-            <Button
-              secondary
-              onClick={() => window.open(FLOW_URL, "_blank", "noopener,noreferrer")}
-            >
-              Open Flow
-            </Button>
+            <Button disabled={!character} onClick={() => void copyPrompt()}>Copy prompt</Button>
           </div>
           <p className="media-help">
             In Flow, add the character portrait as a reference/ingredient, paste the prompt, generate,
@@ -269,8 +262,9 @@ export function CharacterMediaStudio() {
           <label>
             File from Google Flow
             <input
+              key={file?.name || "empty"}
               type="file"
-              accept="image/*,video/mp4,video/webm"
+              accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm"
               onChange={(event) => setFile(event.target.files?.[0] || null)}
             />
           </label>
@@ -315,7 +309,7 @@ export function CharacterMediaStudio() {
             <h2>{character ? character.name + "'s media" : "Character media"}</h2>
             <p>Media stored here can be selected automatically when this character is asked for a photo or video.</p>
           </div>
-          <Badge tone="green">{assets.data?.length || 0} assets</Badge>
+          <Badge tone="green">{assets.isLoading ? "Loading…" : characterAssets.length + " assets"}</Badge>
         </div>
         <div className="media-send-toolbar">
           <label>
@@ -348,7 +342,7 @@ export function CharacterMediaStudio() {
           <p className="empty">Loading character media…</p>
         ) : assets.data?.length ? (
           <div className="media-asset-grid">
-            {assets.data.filter((asset) => asset.bucket === "stories").map((asset) => (
+            {characterAssets.map((asset) => (
               <article className="media-asset-card" key={asset.id}>
                 <div className="media-asset-preview">
                   <Media bucket={asset.bucket} path={asset.path} mime={asset.mime} />
