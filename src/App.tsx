@@ -14,6 +14,7 @@ import {
   Backup,
   CharacterLab,
   Dashboard,
+  GoogleAIEngine,
   Library,
   Settings,
   Social,
@@ -39,6 +40,8 @@ function Page({ page }: { page: string }) {
   }
   if (["personality", "appearance", "voice", "voice-notes"].includes(page))
     return <CharacterLab page={page} />;
+  if (page === "google-ai") return <GoogleAIEngine />;
+  if (page === "providers" || page === "models") return <Navigate replace to="/google-ai" />;
   if (page === "social") return <Social />;
   if (["stories", "story-scheduler"].includes(page))
     return <Stories scheduler={page === "story-scheduler"} />;
