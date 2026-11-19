@@ -292,11 +292,13 @@ export const handler = endpoint(async (req) => {
     ].join("\n\n");
     const model = Deno.env.get("GEMINI_LIVE_MODEL") || "gemini-3.8-live";
     const config = {
-      responseModalities: ["AUDIO"],
-      systemInstruction: { parts: [{ text: instruction }] },
-      speechConfig: {
-        voiceConfig: { prebuiltVoiceConfig: { voiceName: googleVoice(character.voice) } },
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: googleVoice(character.voice) } },
+        },
       },
+      systemInstruction: { parts: [{ text: instruction }] },
       inputAudioTranscription: {},
       outputAudioTranscription: {},
       sessionResumption: {},
