@@ -58,7 +58,7 @@ export function Sidebar({
           <Icon name="chevron" size={16} />
         </button>
       </div>
-      <nav aria-label="Main navigation">
+      <nav id="main-navigation" aria-label="Main navigation">
         {nav.map((group) => {
           const isExpanded = expanded.includes(group.section);
           return (

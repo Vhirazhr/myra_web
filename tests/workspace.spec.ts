@@ -590,3 +590,38 @@ test("worker runs due schedules with the browser closed and respects quiet hours
     ).toHaveLength(1);
   }
 });
+
+
+test("responsive shell keeps navigation, search and page motion usable", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/characters");
+  await login(page, email);
+  await expect(page.getByRole("heading", { name: "All Characters" })).toBeVisible();
+  await expect(page.getByLabel("Search workspace")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open navigation" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Open navigation" }).click();
+  await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+  await page.getByRole("button", { name: "All Characters", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "All Characters" })).toBeVisible();
+
+  const mobileOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(mobileOverflow).toBe(false);
+  const pageAnimation = await page.locator(".page").first().evaluate((element) => getComputedStyle(element).animationName);
+  expect(pageAnimation).toBe("myra-page-in");
+
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await expect(page.getByLabel("Search workspace")).toBeVisible();
+  const tabletOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(tabletOverflow).toBe(false);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await expect(page.getByLabel("Search workspace")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open navigation" })).toHaveCount(0);
+  const desktopOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+  expect(desktopOverflow).toBe(false);
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const reducedDuration = await page.locator(".page").first().evaluate((element) => getComputedStyle(element).animationDuration);
+  expect(parseFloat(reducedDuration)).toBeLessThan(0.001);
+});

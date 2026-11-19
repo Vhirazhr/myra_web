@@ -36,7 +36,8 @@ export type IconName =
   | "eye"
   | "edit"
   | "copy"
-  | "trash";
+  | "trash"
+  | "menu";
 
 const paths: Record<IconName, ReactNode> = {
   grid: (
@@ -242,6 +243,7 @@ const paths: Record<IconName, ReactNode> = {
       <path d="M3 6h18M8 6V4h8v2M19 6l-1 15H6L5 6M10 11v5M14 11v5" />
     </>
   ),
+  menu: <path d="M4 6h16M4 12h16M4 18h16" />,
 };
 export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   return (
@@ -311,8 +313,16 @@ export function Modal({
   const closeRef = useRef(close);
   useEffect(() => { closeRef.current = close; }, [close]);
   useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, []);
+  useEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    dialog.current?.focus();
+    const firstControl = dialog.current?.querySelector<HTMLElement>(
+      'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    (firstControl || dialog.current)?.focus();
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();

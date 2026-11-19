@@ -138,6 +138,19 @@ function Shell({ session }: { session: Session }) {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+  useEffect(() => {
+    if (!isCompact || collapsed) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setCollapsed(true);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isCompact, collapsed]);
   const chars = useRows("characters"),
     worlds = useRows("universes");
   const logout = useMutation({
@@ -189,6 +202,14 @@ function Shell({ session }: { session: Session }) {
       )}
       <div className="shell">
         <header className="topbar">
+          {isCompact && (
+            <button type="button" className="icon-btn mobile-menu"
+              aria-label={collapsed ? "Open navigation" : "Close navigation"}
+              aria-expanded={!collapsed} aria-controls="main-navigation"
+              onClick={() => setCollapsed(!collapsed)}>
+              <Icon name={collapsed ? "menu" : "x"} />
+            </button>
+          )}
           <div className="top-title">
             <span>MYRA</span>
             <Icon name="chevron" size={12} />

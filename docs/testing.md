@@ -32,6 +32,7 @@ Suite melewati tes inference bila model tidak dikonfigurasi, dan melewati tes wo
 | Simulasi dan restore | Jadwal dieksekusi sekali, mood dan milestone tersimpan, pause berfungsi, snapshot mengembalikan karakter dan diary yang dihapus |
 | Worker dan notifikasi | Worker dipanggil lewat HTTP tanpa browser, menghormati quiet hours, lalu mengirim pesan proaktif dan mencatat notifikasi ketika diizinkan |
 | Persistensi | Browser baru yang login kembali membaca record, media, dan aktivitas story sebelumnya |
+| Responsive UI | Navigasi drawer dan pencarian tetap tersedia pada HP/tablet, layout tidak overflow pada 390/768/1280 px, transisi halaman dan reduced-motion diperiksa |
 
 ## Pemeriksaan database dan server
 
