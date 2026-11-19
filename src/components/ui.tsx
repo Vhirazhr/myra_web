@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 export type IconName =
   | "grid"
   | "chart"
@@ -254,6 +254,8 @@ export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
       strokeWidth="1.7"
       strokeLinecap="round"
       strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
     >
       {paths[name]}
     </svg>
@@ -267,6 +269,9 @@ export function Button({
   onClick,
   type = "button",
   disabled = false,
+  ariaLabel,
+  ariaPressed,
+  title,
 }: {
   children: ReactNode;
   icon?: IconName;
@@ -274,12 +279,13 @@ export function Button({
   onClick?: () => void;
   type?: "button" | "submit";
   disabled?: boolean;
+  ariaLabel?: string;
+  ariaPressed?: boolean;
+  title?: string;
 }) {
   return (
-    <button
-      type={type}
-      disabled={disabled}
-      onClick={onClick}
+    <button type={type} disabled={disabled} onClick={onClick}
+      aria-label={ariaLabel} aria-pressed={ariaPressed} title={title}
       className={`btn ${secondary ? "btn-secondary" : ""}`}
     >
       {icon && <Icon name={icon} size={16} />} {children}
@@ -299,28 +305,51 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
   return <section className={`card ${className}`}>{children}</section>;
 }
 export function Modal({
-  title,
-  children,
-  close,
-}: {
-  title: string;
-  children: ReactNode;
-  close: () => void;
-}) {
+  title, children, close,
+}: { title: string; children: ReactNode; close: () => void }) {
+  const dialog = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(close);
+  useEffect(() => { closeRef.current = close; }, [close]);
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog.current?.focus();
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !dialog.current) return;
+      const focusable = Array.from(dialog.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ));
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.current.focus();
+        return;
+      }
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      previous?.focus();
+    };
+  }, []);
   return (
-    <div className="modal-backdrop" onMouseDown={close}>
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className="modal"
-        onMouseDown={(e) => e.stopPropagation()}
-      >
+    <div className="modal-backdrop" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) close();
+    }}>
+      <div ref={dialog} role="dialog" aria-modal="true" aria-label={title}
+        tabIndex={-1} className="modal" onMouseDown={(event) => event.stopPropagation()}>
         <div className="modal-head">
           <h2>{title}</h2>
-          <button aria-label="Close dialog" onClick={close}>
-            <Icon name="x" />
-          </button>
+          <button type="button" aria-label="Close dialog" onClick={close}><Icon name="x" /></button>
         </div>
         {children}
       </div>
