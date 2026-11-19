@@ -81,6 +81,11 @@ export async function upload(
       name: file.name,
       mime: file.type,
       bytes: file.size,
+      character_id: metadata.characterId || null,
+      description: metadata.description || "",
+      tags: metadata.tags || [],
+      generation_prompt: metadata.generationPrompt || "",
+      origin: metadata.origin || "upload",
     });
   } catch (e) {
     await db().storage.from(bucket).remove([path]);
