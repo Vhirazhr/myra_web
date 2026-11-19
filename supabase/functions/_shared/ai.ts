@@ -336,16 +336,17 @@ export async function generate(ctx: Context, sourceId: string) {
   const replies = [];
   for (const speaker of cast) {
     const existing = checked(
-      await db.from("messages").select("id").eq("source_id", source.id).eq("character_id", speaker)
-        .limit(1),
+      await db.from("messages").select("id,body,is_streaming").eq("source_id", source.id)
+        .eq("character_id", speaker).limit(1),
     );
-    if (existing.length) {
+    if (existing.length && !existing[0].is_streaming) {
       replies.push(existing[0].id);
       continue;
     }
     const job = "reply/" + source.id + "/" + speaker;
     const token = checked(await service.rpc("claim_ai_job", { actor, job }));
     if (!token) throw new Error("Response already processing. Refresh the conversation.");
+    let streamedReplyId: string | null = null;
     try {
       const profile = checked(
         await db.from("characters").select(
@@ -361,7 +362,7 @@ export async function generate(ctx: Context, sourceId: string) {
           thread.id,
         ).lte("created_at", source.created_at).neq("id", source.id).order("created_at", {
           ascending: false,
-        }).limit(24),
+        }).limit(16),
       ).reverse();
       const siblings = checked(
         await db.from("messages").select("body,character_id").eq("source_id", source.id).order(
@@ -447,6 +448,8 @@ export async function generate(ctx: Context, sourceId: string) {
         "MEDIA HONESTY: If the user asks for a photo or video, only say it is attached when session context confirms a matching saved media asset will be attached. If none is available, be honest and do not pretend to send a file.",
         "GROUP PLAY: When other characters are present, preserve each participant's distinct voice and do not speak for the user.",
       ].join("\n");
+      let lastPersistedLength = 0;
+      let lastPersistedAt = 0;
       const answer = await completion(ctx, "conversation", [
         {
           role: "system",
@@ -469,7 +472,7 @@ export async function generate(ctx: Context, sourceId: string) {
                 ? { name: mediaAsset.name, description: mediaAsset.description, mime: mediaAsset.mime }
                 : null,
               style: prefs?.system_prompt,
-            }).slice(0, 28000),
+            }).slice(0, 18000),
         },
         ...past.map((m) => ({
           role: m.role as Turn["role"],
@@ -480,28 +483,40 @@ export async function generate(ctx: Context, sourceId: string) {
             role: "system" as const,
             content:
               "Saved context from previous conversations follows. First-person statements from the user describe the person speaking to you. Use relevant facts naturally; do not recite the memory list.\n" +
-              memory.map((m: { body: string }) => "- " + m.body).join("\n").slice(0, 12000),
+              memory.map((m: { body: string }) => "- " + m.body).join("\n").slice(0, 8000),
           }]
           : []),
         { role: "user", content: turn },
-      ]);
-      let fact = "", scope = "character";
-      if (source.memory_mode === "remember") {
-        fact = source.body;
-        scope = "user";
-      }
-      if (["private", "automatic"].includes(source.memory_mode)) {
-        const extracted = await completion(ctx, "memory extraction", [
-          {
-            role: "system",
-            content:
-              "Extract one durable fact explicitly stated by the user for future conversations. Reply with only that fact in a single short sentence. If the user asks a question or states no lasting fact, reply only NONE.",
-          },
-          { role: "user", content: source.body },
-        ]);
-        if (!/^NONE[.!]?$/i.test(extracted.trim())) fact = extracted;
-        if (source.memory_mode === "private") scope = "thread_only";
-      }
+      ], async (partial) => {
+        const now = Date.now();
+        if (
+          !streamedReplyId ||
+          partial.length - lastPersistedLength >= 120 ||
+          now - lastPersistedAt >= 750
+        ) {
+          if (!streamedReplyId) {
+            const started = await service.rpc("start_ai_reply", {
+              actor,
+              job,
+              token,
+              source: source.id,
+              speaker,
+            });
+            if (started.error) throw new Error(started.error.message);
+            streamedReplyId = started.data as string;
+          }
+          const updated = await service.rpc("update_ai_reply", {
+            actor,
+            job,
+            token,
+            reply: streamedReplyId,
+            answer: partial,
+          });
+          if (updated.error) throw new Error(updated.error.message);
+          lastPersistedLength = partial.length;
+          lastPersistedAt = now;
+        }
+      });
       const replyId = checked(
         await service.rpc("finish_ai_reply", {
           actor,
@@ -510,10 +525,22 @@ export async function generate(ctx: Context, sourceId: string) {
           source: source.id,
           speaker,
           answer,
-          fact,
-          fact_type: scope,
+          fact: "",
+          fact_type: source.memory_mode || "off",
         }),
       );
+      const edgeRuntime = (globalThis as unknown as {
+        EdgeRuntime?: { waitUntil(promise: Promise<unknown>): void };
+      }).EdgeRuntime;
+      if (source.memory_mode && source.memory_mode !== "off" && edgeRuntime) {
+        edgeRuntime.waitUntil(
+          processMemoryTasks(service, 1).catch((error) => {
+            console.error("[MYRA] Background memory processing failed", {
+              error: error instanceof Error ? error.message : "Unknown memory worker error",
+            });
+          }),
+        );
+      }
 
       if (mediaAsset) {
         checked(
@@ -526,6 +553,13 @@ export async function generate(ctx: Context, sourceId: string) {
       }
       replies.push(replyId);
     } catch (error) {
+      if (streamedReplyId) {
+        const discarded = await service.from("messages").delete().eq("id", streamedReplyId)
+          .eq("owner_id", actor).eq("is_streaming", true);
+        if (discarded.error) {
+          console.error("[MYRA] Could not remove incomplete streamed reply", discarded.error.message);
+        }
+      }
       checked(await service.rpc("release_ai_job", { actor, job, token }));
       throw error;
     }
