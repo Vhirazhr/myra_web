@@ -61,8 +61,7 @@ export const nav = [
   {
     section: "AI Engine",
     items: [
-      ["AI Providers", "spark", "providers"],
-      ["Model Configuration", "settings", "models"],
+      ["Google AI Engine", "spark", "google-ai"],
       ["Memory Engine", "brain", "memory"],
       ["Language Engine", "globe", "language"],
       ["Response Behavior", "message", "response"],
