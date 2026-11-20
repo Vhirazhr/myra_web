@@ -324,7 +324,12 @@ export function Editor({
         for (const f of spec.fields) {
           let val = current[f.key];
           if (f.when && current[f.when[0]] !== f.when[1]) {
-            fields[f.key] = null;
+            // Provider connection fields are NOT NULL in Postgres. Hidden provider-specific
+            // fields must be saved as empty strings, not null, when the adapter does not use them.
+            fields[f.key] = spec.table === "providers" &&
+                (f.key === "base_url" || f.key === "secret_name")
+              ? ""
+              : null;
             continue;
           }
           if (f.type === "file") {
