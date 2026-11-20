@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 export type IconName =
   | "grid"
   | "chart"
@@ -351,7 +352,7 @@ export function Modal({
       previous?.focus();
     };
   }, []);
-  return (
+  return createPortal(
     <div className="modal-backdrop" onMouseDown={(event) => {
       if (event.target === event.currentTarget) close();
     }}>
@@ -363,6 +364,7 @@ export function Modal({
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

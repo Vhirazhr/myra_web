@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { z } from "zod";
 import { Button, Card, Badge, Icon } from "./ui";
@@ -192,15 +192,25 @@ function initialValues(spec: Spec, row?: Row): Values {
     }),
   );
 }
-function Choices({ field, value, change }: { field: Field; value: any; change: (x: any) => void }) {
+function Choices({
+  field,
+  value,
+  change,
+  invalid = false,
+}: {
+  field: Field;
+  value: any;
+  change: (x: any) => void;
+  invalid?: boolean;
+}) {
   const records = useRows(field.table!);
   if (records.isError) return <span role="alert">{errorText(records.error)}</span>;
   const multiple = field.type === "multi";
   return (
     <select
       aria-label={field.label}
+      aria-invalid={invalid}
       multiple={multiple}
-      required={field.required}
       value={value}
       onChange={(e) =>
         change(multiple ? Array.from(e.target.selectedOptions, (o) => o.value) : e.target.value)
@@ -249,7 +259,9 @@ export function Editor({
   const [values, setValues] = useState(() => initialValues(spec, row)),
     [files, setFiles] = useState<Record<string, File>>({}),
     [step, setStep] = useState(0),
-    [maxVisitedStep, setMaxVisitedStep] = useState(0);
+    [maxVisitedStep, setMaxVisitedStep] = useState(0),
+    [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const formRef = useRef<HTMLFormElement>(null);
   const rosterTable = spec.table === "groups" ? "group_members" : "universe_characters";
   const parent = spec.table === "groups" ? "group_id" : "universe_id";
   const hasRoster = spec.fields.some((f) => f.type === "multi");
@@ -264,7 +276,39 @@ export function Editor({
   const update = (key: string, value: any) => {
     if (key === "members") setRosterTouched(true);
     setValues((v) => ({ ...v, [key]: value }));
+    setValidationErrors((previous) => {
+      if (!previous[key]) return previous;
+      const next = { ...previous };
+      delete next[key];
+      return next;
+    });
   };
+  const visibleFields = spec.fields.filter((f) => !wizard || wizardKeys[step].includes(f.key));
+  function validateFields(fieldsToCheck: Field[]) {
+    const errors: Record<string, string> = {};
+    for (const f of fieldsToCheck) {
+      if (f.when && current[f.when[0]] !== f.when[1]) continue;
+      if (!f.required) continue;
+      const value = current[f.key];
+      const missing = f.type === "multi"
+        ? !Array.isArray(value) || value.length === 0
+        : value == null || (typeof value === "string" && !value.trim());
+      if (missing) errors[f.key] = f.label + " is required.";
+    }
+    if (spec.table === "conversations" && current.universe_id && current.crossover_id)
+      errors.crossover_id = "Choose either a universe or a crossover, not both.";
+    setValidationErrors(errors);
+    const firstInvalid = fieldsToCheck.find((f) => errors[f.key]);
+    if (firstInvalid) {
+      const wrapper = formRef.current?.querySelector<HTMLElement>(
+        `[data-field="${firstInvalid.key}"]`,
+      );
+      const control = wrapper?.querySelector<HTMLElement>("input, select, textarea");
+      wrapper?.scrollIntoView({ behavior: "smooth", block: "center" });
+      control?.focus({ preventScroll: true });
+    }
+    return Object.keys(errors).length === 0;
+  }
   const cancel = () => {
     setValues(initialValues(spec, row));
     setFiles({});
@@ -350,23 +394,40 @@ export function Editor({
     if (f.type === "file") {
       const existingPath = row?.[f.key] ? String(row[f.key]) : undefined;
       return (
-        <FilePicker
-          key={f.key}
-          label={f.label}
-          accept={f.accept || "image/*"}
-          bucket={f.bucket!}
-          file={files[f.key] || null}
-          existingPath={existingPath}
-          existingMime={f.key === "media" ? String(row?.mime || "") : ""}
-          onChange={(selected) => setFiles((currentFiles) => {
-            const next = { ...currentFiles };
-            if (selected) next[f.key] = selected;
-            else delete next[f.key];
-            return next;
-          })}
-        />
+        <div key={f.key} className="editor-field-wrap" data-field={f.key}>
+          <FilePicker
+            label={f.label}
+            accept={f.accept || "image/*"}
+            bucket={f.bucket!}
+            file={files[f.key] || null}
+            existingPath={existingPath}
+            existingMime={f.key === "media" ? String(row?.mime || "") : ""}
+            onChange={(selected) => setFiles((currentFiles) => {
+              const next = { ...currentFiles };
+              if (selected) next[f.key] = selected;
+              else delete next[f.key];
+              return next;
+            })}
+          />
+          {validationErrors[f.key] && (
+            <small className="field-error" role="alert">{validationErrors[f.key]}</small>
+          )}
+        </div>
       );
     }
+    if (f.type === "check")
+      return (
+        <label key={f.key} className="editor-check-field" data-field={f.key}>
+          <span>{f.label}</span>
+          <input
+            type="checkbox"
+            role="switch"
+            checked={!!value}
+            aria-label={f.label}
+            onChange={(e) => change(e.target.checked)}
+          />
+        </label>
+      );
     if (f.type === "traits")
       return (
         <div className="trait-editor span2" key={f.key}>
@@ -388,29 +449,45 @@ export function Editor({
     return (
       <label
         key={f.key}
-        className={["area", "multi", "file"].includes(f.type || "") ? "span2" : ""}
+        data-field={f.key}
+        className={[
+          "editor-field",
+          ["area", "multi", "file"].includes(f.type || "") ? "span2" : "",
+          spec.table === "conversations" && f.key === "name" ? "editor-field-wide" : "",
+          validationErrors[f.key] ? "has-error" : "",
+        ].filter(Boolean).join(" ")}
       >
         {f.label}
         {f.type === "ref" || f.type === "multi" ? (
-          <Choices field={f} value={value ?? ""} change={change} />
+          <Choices
+            field={f}
+            value={value ?? ""}
+            change={change}
+            invalid={!!validationErrors[f.key]}
+          />
         ) : f.type === "area" ? (
           <textarea
             value={String(value ?? "")}
-            required={f.required}
+            aria-invalid={!!validationErrors[f.key]}
+            aria-describedby={validationErrors[f.key] ? `${spec.table}-${f.key}-error` : undefined}
             onChange={(e) => change(e.target.value)}
           />
         ) : f.type === "select" ? (
-          <select value={String(value)} onChange={(e) => change(e.target.value)}>
+          <select
+            value={String(value)}
+            aria-invalid={!!validationErrors[f.key]}
+            aria-describedby={validationErrors[f.key] ? `${spec.table}-${f.key}-error` : undefined}
+            onChange={(e) => change(e.target.value)}
+          >
             {f.options?.map((o) => (
               <option key={o}>{o}</option>
             ))}
           </select>
-        ) : f.type === "check" ? (
-          <input type="checkbox" checked={!!value} onChange={(e) => change(e.target.checked)} />
         ) : (
           <input
             type={f.type || "text"}
-            required={f.required}
+            aria-invalid={!!validationErrors[f.key]}
+            aria-describedby={validationErrors[f.key] ? `${spec.table}-${f.key}-error` : undefined}
             min={f.min}
             max={f.max}
             step={f.step}
@@ -418,15 +495,23 @@ export function Editor({
             onChange={(e) => change(e.target.value)}
           />
         )}
+        {validationErrors[f.key] && (
+          <small id={`${spec.table}-${f.key}-error`} className="field-error" role="alert">
+            {validationErrors[f.key]}
+          </small>
+        )}
       </label>
     );
   }
   return (
     <>
       <form
-        className="editor-form"
+        ref={formRef}
+        noValidate
+        className={`editor-form ${spec.table === "conversations" ? "editor-form-conversations" : ""}`}
         onSubmit={(e) => {
           e.preventDefault();
+          if (!validateFields(visibleFields)) return;
           if (wizard && step < 7) {
             setMaxVisitedStep((visited) => Math.max(visited, step + 1));
             setStep(step + 1);
@@ -459,7 +544,7 @@ export function Editor({
               </div>
             )}
             <fieldset disabled={persist.isPending} className="form-grid">
-              {spec.fields.filter((f) => !wizard || wizardKeys[step].includes(f.key)).map(field)}
+              {visibleFields.map(field)}
             </fieldset>
             {(persist.isError || roster.isError) && (
               <p role="alert" className="form-error">

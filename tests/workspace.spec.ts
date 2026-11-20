@@ -668,3 +668,35 @@ test("brand logo and image fields use the MYRA visual system", async ({ page }) 
   await expect(page.getByText("World cover", { exact: true })).toBeVisible();
   await expect(page.locator(".file-picker-dropzone")).toBeVisible();
 });
+
+
+test("conversation settings stays above app chrome and validates fields inline", async ({ page }) => {
+  await page.goto("/characters");
+  await login(page, email);
+  const characterName = "Conversation UX " + randomUUID().slice(0, 6);
+  await character(page, characterName);
+
+  await page.goto("/chat");
+  const form = await create(page, "conversation");
+  await form.getByLabel("Conversation title").fill("Settings UX check");
+  await form.getByLabel("Character", { exact: true }).selectOption({ label: characterName });
+  await form.getByRole("button", { name: "Save conversation" }).click();
+  await expect(page.getByRole("heading", { name: "Settings UX check" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  const dialog = page.getByRole("dialog", { name: "Conversation settings" });
+  await expect(dialog).toBeInViewport();
+  const title = dialog.getByLabel("Conversation title");
+  await title.fill("");
+  await dialog.getByRole("button", { name: "Save conversation" }).click();
+
+  await expect(dialog.getByText("Conversation title is required.", { exact: true })).toBeVisible();
+  await expect(title).toHaveAttribute("aria-invalid", "true");
+  await expect(title).toBeInViewport();
+  expect(await title.evaluate((element: HTMLInputElement) => element.validationMessage)).toBe("");
+
+  const proactive = dialog.getByRole("switch", { name: "Allow character-initiated messages" });
+  const toggle = await proactive.boundingBox();
+  expect(toggle?.width).toBe(42);
+  expect(toggle?.height).toBe(24);
+});
