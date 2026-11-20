@@ -47,7 +47,7 @@ pnpm exec supabase functions deploy myra --project-ref splifnxylqaicneodkaj
 pnpm exec supabase functions deploy worker --project-ref splifnxylqaicneodkaj
 ```
 
-Gemini defaults can be overridden with `GEMINI_CHAT_MODEL`, `GEMINI_LIVE_MODEL`, and `GEMINI_TTS_MODEL`. The current chat default is `gemini-3.6-flash`; Live and TTS use their dedicated model IDs.
+New Gemini templates use `GEMINI_CHAT_MODEL` in the Model ID field. The Edge Function resolves this to the Supabase setting, with `gemini-3.6-flash` as the application default. Existing rows with an explicit model ID keep using that ID. To use the server setting for an existing row, edit its Model ID to `GEMINI_CHAT_MODEL` and save. Live and TTS read `GEMINI_LIVE_MODEL` and `GEMINI_TTS_MODEL` respectively.
 
 ## Configure the other providers
 

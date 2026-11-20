@@ -1,3 +1,4 @@
+import { compatibleSecretNames } from "../../supabase/functions/_shared/provider-endpoints";
 import type { Field, Spec } from "../types/workspace";
 export const text = (key: string, label: string, required = false): Field => ({
   key,
@@ -203,7 +204,7 @@ export const aiProvider: Spec = {
     number("temperature", "Temperature", 0.7, 0, 2),
     check("supports_vision", "Model accepts image input"),
     { ...text("base_url", "Official API base URL"), when: ["adapter", "compatible"] },
-    { ...text("secret_name", "Supabase secret variable name"), when: ["adapter", "compatible"] },
+    { ...choose("secret_name", "Supabase secret variable name", compatibleSecretNames), when: ["adapter", "compatible"] },
     number("input_price", "Input price per 1M tokens (USD)", 0, 0, 1000),
     number("output_price", "Output price per 1M tokens (USD)", 0, 0, 1000),
   ],

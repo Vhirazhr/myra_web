@@ -218,3 +218,127 @@ Deno.test("compatible adapters reject arbitrary hosts and nonstandard ports", wi
     assertEquals(usage.length, 1, "rejected URL should be logged");
   }
 }));
+
+Deno.test("invalid templates, mismatched secrets and provider 422s fall through to OpenAI", withEnv({
+  GROQ_API_KEY: "test-groq", DEEPSEEK_API_KEY: "test-deepseek", OPENAI_API_KEY: "test-openai",
+}, async () => {
+  const { ctx, usage } = mockContext([
+    { name: "Unconfigured", adapter: "openai", model: "YOUR_MODEL_ID", priority: 1 },
+    { name: "Mismatched host", adapter: "compatible", secret_name: "GROQ_API_KEY", base_url: "https://api.deepseek.com/v1", model: "chat", priority: 2 },
+    { name: "DeepSeek", adapter: "compatible", secret_name: "DEEPSEEK_API_KEY", base_url: "https://api.deepseek.com/v1", model: "unavailable", priority: 3 },
+    { name: "OpenAI", adapter: "openai", model: "gpt-5-mini", priority: 4 },
+  ]);
+  const requests: { url: string; body: Record<string, unknown> }[] = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+    if (String(input).includes("deepseek.com")) {
+      return Response.json({ error: { message: "Unsupported model for test-deepseek" } }, { status: 422 });
+    }
+    return Response.json({ choices: [{ message: { content: "ok" } }] });
+  };
+  try {
+    assertEquals(await completeWithProviders(ctx, "connection test", [{ role: "user", content: "hi" }]), "ok", "fallback");
+    assertEquals(requests.map((x) => x.url), ["https://api.deepseek.com/v1/chat/completions", "https://api.openai.com/v1/chat/completions"], "outbound requests");
+    assertEquals(requests[0].body.max_tokens, 120, "compatible token parameter");
+    assertEquals(requests[1].body.max_completion_tokens, 1024, "reasoning budget");
+    assertEquals("temperature" in requests[1].body || "max_tokens" in requests[1].body, false, "reasoning parameters");
+    assertEquals(usage.length, 4, "usage attempts");
+    assertIncludes(String(usage[0].error), "Enter a model ID", "template validation");
+    assertIncludes(String(usage[1].error), "api.groq.com", "secret host binding");
+    assertEquals(usage[2].error, "Unsupported model for [redacted]", "sanitized upstream error");
+  } finally {
+    globalThis.fetch = original;
+  }
+}));
+
+Deno.test("Gemini server model and explicit overrides send version-compatible requests", withEnv({
+  GEMINI_API_KEY: "test-gemini", GEMINI_CHAT_MODEL: "models/gemini-2.5-flash",
+}, async () => {
+  const original = globalThis.fetch;
+  const requests: { url: string; config: Record<string, unknown> }[] = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: String(input), config: JSON.parse(String(init?.body)).generationConfig });
+    return Response.json({ candidates: [{ content: { parts: [{ thought: true, text: "thought" }, { text: "reply" }] } }] });
+  };
+  try {
+    for (const model of ["GEMINI_CHAT_MODEL", "models/gemini-3-flash-preview"]) {
+      const { ctx, usage } = mockContext([{ id: "g", name: "Gemini", adapter: "gemini", model }]);
+      assertEquals(await completeWithProviders(ctx, "connection test", [{ role: "user", content: "hi" }], undefined, { providerId: "g" }), "reply", "visible reply");
+      assertIncludes(requests.at(-1)!.url, "/models/" + usage[0].model + ":generateContent", "logged effective model");
+    }
+    assertIncludes(requests[0].url, "/models/gemini-2.5-flash:", "server setting");
+    assertEquals(requests[0].config.thinkingConfig, undefined, "Gemini 2.x compatibility");
+    assertEquals(requests[1].config.thinkingConfig, { thinkingLevel: "LOW" }, "Gemini 3 override");
+  } finally {
+    globalThis.fetch = original;
+  }
+}));
+
+Deno.test("Claude accepts the highest temperature from the provider editor", withEnv({
+  ANTHROPIC_API_KEY: "test-anthropic",
+}, async () => {
+  const { ctx } = mockContext([{ id: "c", name: "Claude", adapter: "anthropic", model: "claude", temperature: 2 }]);
+  const original = globalThis.fetch;
+  globalThis.fetch = async (_input, init) => {
+    assertEquals(JSON.parse(String(init?.body)).temperature, 1, "Anthropic temperature");
+    return Response.json({ content: [{ type: "text", text: "ok" }] });
+  };
+  try {
+    assertEquals(await completeWithProviders(ctx, "connection test", [{ role: "user", content: "hi" }], undefined, { providerId: "c" }), "ok", "reply");
+  } finally {
+    globalThis.fetch = original;
+  }
+}));
+
+Deno.test("Groq and OpenRouter use their own endpoints and server keys", withEnv({
+  GROQ_API_KEY: "test-groq", OPENROUTER_API_KEY: "test-openrouter",
+}, async () => {
+  const original = globalThis.fetch;
+  const requests: { url: string; authorization: string | null }[] = [];
+  globalThis.fetch = async (input, init) => {
+    requests.push({ url: String(input), authorization: new Headers(init?.headers).get("authorization") });
+    return Response.json({ choices: [{ message: { content: "ok" } }] });
+  };
+  try {
+    const { ctx } = mockContext([
+      { id: "groq", name: "Groq", adapter: "compatible", model: "chat", base_url: "https://api.groq.com/openai/v1", secret_name: "GROQ_API_KEY" },
+      { id: "router", name: "OpenRouter", adapter: "openrouter", model: "vendor/chat" },
+    ]);
+    for (const providerId of ["groq", "router"]) {
+      await completeWithProviders(ctx, "connection test", [{ role: "user", content: "hi" }], undefined, { providerId });
+    }
+    assertEquals(requests, [
+      { url: "https://api.groq.com/openai/v1/chat/completions", authorization: "Bearer test-groq" },
+      { url: "https://openrouter.ai/api/v1/chat/completions", authorization: "Bearer test-openrouter" },
+    ], "provider destinations");
+  } finally {
+    globalThis.fetch = original;
+  }
+}));
+
+Deno.test("invalid local attachments stop before trying the next vision provider", withEnv({
+  GEMINI_API_KEY: "test-gemini", OPENAI_API_KEY: "test-openai",
+}, async () => {
+  const { ctx, usage } = mockContext([
+    { name: "Gemini", adapter: "gemini", model: "gemini-2.5-flash", priority: 1, supports_vision: true },
+    { name: "OpenAI", adapter: "openai", model: "vision", priority: 2, supports_vision: true },
+  ]);
+  const original = globalThis.fetch;
+  const attempts: string[] = [];
+  globalThis.fetch = async (input) => {
+    attempts.push(String(input));
+    return new Response("invalid attachment", { headers: { "content-type": "text/plain" } });
+  };
+  try {
+    const image = "https://example.invalid/object";
+    const error = await completeWithProviders(ctx, "conversation", [{
+      role: "user", content: [{ type: "image_url", image_url: { url: image } }],
+    }]).catch((error: Error) => error.message);
+    assertEquals(error, "Unsupported image attachment", "attachment failure");
+    assertEquals(attempts, [image], "outbound requests");
+    assertEquals(usage.length, 1, "provider attempts");
+  } finally {
+    globalThis.fetch = original;
+  }
+}));

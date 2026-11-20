@@ -50,6 +50,8 @@ async function removeMessageAttachments(items: Row[]) {
     if (!item.attachment) continue;
     const bucket = item.attachment_bucket ||
       (item.role === "assistant" && item.mime?.startsWith("audio/") ? "voice-media" : "conversation-media");
+    // Studio assets can be shared by several messages and stories.
+    if (bucket !== "conversation-media" && bucket !== "voice-media") continue;
     const paths = grouped.get(bucket) || [];
     paths.push(item.attachment);
     grouped.set(bucket, paths);
@@ -106,7 +108,9 @@ export async function call(action: string, data: Record<string, unknown> = {}) {
   if (r.error) {
     let detail = r.error.message;
     try {
-      detail = (await r.error.context.json()).error || detail;
+      const body = await r.error.context.json();
+      const message = [body.error, body.message, body.msg].find((value) => typeof value === "string" && value);
+      if (message) detail = message;
     } catch {}
     throw new Error(detail);
   }

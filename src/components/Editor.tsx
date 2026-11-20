@@ -182,6 +182,7 @@ function initialValues(spec: Spec, row?: Row): Values {
   return Object.fromEntries(
     spec.fields.map((f) => {
       let v = row?.[f.key] ?? f.initial;
+      if (spec.table === "providers" && f.key === "secret_name" && !v) v = f.initial;
       if (f.key === "target") v = row?.group_id ? "group" : "character";
       if (f.type === "datetime-local")
         v = dateValue(
@@ -294,6 +295,13 @@ export function Editor({
         ? !Array.isArray(value) || value.length === 0
         : value == null || (typeof value === "string" && !value.trim());
       if (missing) errors[f.key] = f.label + " is required.";
+    }
+    if (spec.table === "providers" && current.enabled && String(current.model).trim() === "YOUR_MODEL_ID")
+      errors.model = "Enter a model ID available to your provider account before enabling it.";
+    if (spec.table === "providers" && current.adapter === "compatible") {
+      const allowed = spec.fields.find((field) => field.key === "secret_name")?.options;
+      if (!allowed?.includes(String(current.secret_name)))
+        errors.secret_name = "Select the name of a supported Supabase secret.";
     }
     if (spec.table === "conversations" && current.universe_id && current.crossover_id)
       errors.crossover_id = "Choose either a universe or a crossover, not both.";

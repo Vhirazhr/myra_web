@@ -1,3 +1,4 @@
+import { geminiModelId } from "../_shared/ai-providers.ts";
 import { authorize, checked, endpoint, HttpError, id, required } from "../_shared/backend.ts";
 import { completion, generate } from "../_shared/ai.ts";
 
@@ -60,10 +61,11 @@ function googleVoice(value: unknown) {
   return aliases[name.toLowerCase()] || "Kore";
 }
 async function geminiRequest(path: string, body: Record<string, unknown>) {
+  const key = required("GEMINI_API_KEY");
   const response = await fetch("https://generativelanguage.googleapis.com/v1beta/" + path, {
     method: "POST",
     headers: {
-      "x-goog-api-key": required("GEMINI_API_KEY"),
+      "x-goog-api-key": key,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
@@ -73,7 +75,7 @@ async function geminiRequest(path: string, body: Record<string, unknown>) {
   if (!response.ok) {
     throw new HttpError(
       response.status >= 500 ? 502 : response.status,
-      payload.error?.message || "Gemini API HTTP " + response.status,
+      String(payload.error?.message || "Gemini API HTTP " + response.status).replaceAll(key, "[redacted]"),
     );
   }
   return payload;
@@ -236,7 +238,7 @@ export const handler = endpoint(async (req) => {
     if (blob.size > 20 * 1024 * 1024) {
       throw new HttpError(413, "Audio files over 20 MB cannot be transcribed inline");
     }
-    const model = Deno.env.get("GEMINI_CHAT_MODEL") || "gemini-3.6-flash";
+    const model = geminiModelId();
     const generated = await geminiRequest("models/" + encodeURIComponent(model) + ":generateContent", {
       contents: [{
         role: "user",
@@ -325,12 +327,13 @@ export const handler = endpoint(async (req) => {
     );
     try {
       const now = Date.now();
+      const key = required("GEMINI_API_KEY");
       const tokenResponse = await fetch(
         "https://generativelanguage.googleapis.com/v1beta/auth_tokens",
         {
           method: "POST",
           headers: {
-            "x-goog-api-key": required("GEMINI_API_KEY"),
+            "x-goog-api-key": key,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
@@ -347,7 +350,8 @@ export const handler = endpoint(async (req) => {
       );
       const payload = await tokenResponse.json();
       if (!tokenResponse.ok || !payload.name) {
-        throw new Error(payload.error?.message || "Gemini Live token request failed");
+        throw new HttpError(tokenResponse.ok ? 502 : tokenResponse.status,
+          String(payload.error?.message || "Gemini Live token request failed").replaceAll(key, "[redacted]"));
       }
       return { token: payload.name, id: record.id, model };
     } catch (error) {

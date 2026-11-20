@@ -439,7 +439,7 @@ const aiProviderTemplates = [
   {
     name: "Google Gemini",
     adapter: "gemini",
-    model: "gemini-3.6-flash",
+    model: "GEMINI_CHAT_MODEL",
     priority: 1,
     enabled: true,
     temperature: 0.7,
@@ -540,7 +540,7 @@ export function MultiAIProviders() {
           ? !existingNames.has(provider.name.toLowerCase())
           : !existingNativeAdapters.has(provider.adapter)
       );
-      for (const provider of missing) await save("providers", provider);
+      if (missing.length) result(await db().from("providers").insert(missing));
       return missing.length;
     },
     onSuccess: async () => {
@@ -572,11 +572,12 @@ export function MultiAIProviders() {
         <p>
           Add the recommended provider rows in one click. Gemini is enabled first; the other
           providers start disabled until you add their server-side API keys and replace
-          YOUR_MODEL_ID with a model available to your account.
+          YOUR_MODEL_ID with a model available to your account. Use GEMINI_CHAT_MODEL as the
+          Gemini model ID to follow your Supabase model setting, or enter a specific model ID.
         </p>
         <div className="wizard-actions">
           <Button
-            disabled={providers.isPending || addTemplates.isPending}
+            disabled={!providers.isSuccess || providers.isFetching || addTemplates.isPending}
             onClick={() => addTemplates.mutate()}
           >
             {addTemplates.isPending ? "Adding providers…" : "Add missing provider templates"}

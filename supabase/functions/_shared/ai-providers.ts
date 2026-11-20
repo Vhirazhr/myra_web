@@ -1,3 +1,4 @@
+import { compatibleHosts, compatibleSecretNames } from "./provider-endpoints.ts";
 import { checked, HttpError, type Context } from "./backend.ts";
 
 export type Turn = {
@@ -33,42 +34,14 @@ type CompletionOptions = {
   adapter?: string;
 };
 
-const COMPATIBLE_HOSTS = new Set([
-  "api.deepseek.com",
-  "api.groq.com",
-  "api.mistral.ai",
-  "api.x.ai",
-  "api.together.xyz",
-  "api.fireworks.ai",
-  "api.cerebras.ai",
-  "api.perplexity.ai",
-  "api.sambanova.ai",
-  "api.nebius.com",
-  "api.siliconflow.com",
-  "api.moonshot.ai",
-  "api.minimax.io",
-  "api.novita.ai",
-  "api.hyperbolic.xyz",
-]);
+class AttachmentError extends HttpError {}
 
-const COMPATIBLE_SECRETS = new Set([
-  "AI_COMPATIBLE_API_KEY",
-  "DEEPSEEK_API_KEY",
-  "GROQ_API_KEY",
-  "MISTRAL_API_KEY",
-  "XAI_API_KEY",
-  "TOGETHER_API_KEY",
-  "FIREWORKS_API_KEY",
-  "CEREBRAS_API_KEY",
-  "PERPLEXITY_API_KEY",
-  "SAMBANOVA_API_KEY",
-  "NEBIUS_API_KEY",
-  "SILICONFLOW_API_KEY",
-  "MOONSHOT_API_KEY",
-  "MINIMAX_API_KEY",
-  "NOVITA_API_KEY",
-  "HYPERBOLIC_API_KEY",
-]);
+export function geminiModelId(configured = "GEMINI_CHAT_MODEL") {
+  const model = configured === "GEMINI_CHAT_MODEL"
+    ? Deno.env.get("GEMINI_CHAT_MODEL") || "gemini-3.6-flash"
+    : configured;
+  return model.trim().replace(/^models\//, "");
+}
 
 function encodeBase64(bytes: Uint8Array) {
   let binary = "";
@@ -103,10 +76,10 @@ async function geminiParts(content: Turn["content"]) {
     const response = await fetch(item.image_url.url, { signal: AbortSignal.timeout(20000) });
     if (!response.ok) throw new HttpError(502, "Could not load the attached image for Gemini");
     const mimeType = (response.headers.get("content-type") || "image/jpeg").split(";")[0];
-    if (!mimeType.startsWith("image/")) throw new HttpError(422, "Unsupported image attachment");
+    if (!mimeType.startsWith("image/")) throw new AttachmentError(422, "Unsupported image attachment");
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.byteLength > 12 * 1024 * 1024) {
-      throw new HttpError(413, "Image attachments for AI analysis must be 12 MB or smaller");
+      throw new AttachmentError(413, "Image attachments for AI analysis must be 12 MB or smaller");
     }
     parts.push({ inlineData: { mimeType, data: encodeBase64(bytes) } });
   }
@@ -140,10 +113,10 @@ async function anthropicContent(content: Turn["content"]) {
     const response = await fetch(part.image_url.url, { signal: AbortSignal.timeout(20000) });
     if (!response.ok) throw new HttpError(502, "Could not load the attached image for Claude");
     const mediaType = (response.headers.get("content-type") || "image/jpeg").split(";")[0];
-    if (!mediaType.startsWith("image/")) throw new HttpError(422, "Unsupported image attachment");
+    if (!mediaType.startsWith("image/")) throw new AttachmentError(422, "Unsupported image attachment");
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (bytes.byteLength > 12 * 1024 * 1024) {
-      throw new HttpError(413, "Image attachments for AI analysis must be 12 MB or smaller");
+      throw new AttachmentError(413, "Image attachments for AI analysis must be 12 MB or smaller");
     }
     blocks.push({
       type: "image",
@@ -192,7 +165,7 @@ async function upstreamFailure(response: Response, providerName: string): Promis
   const payload = await response.json().catch(() => ({}));
   const message = payload.error?.message || payload.message ||
     providerName + " returned HTTP " + response.status;
-  throw new HttpError(response.status, String(message).slice(0, 1200));
+  throw new HttpError(response.status, String(message));
 }
 
 function providerSecretName(provider: Provider) {
@@ -202,7 +175,7 @@ function providerSecretName(provider: Provider) {
   if (provider.adapter === "anthropic") return "ANTHROPIC_API_KEY";
   if (provider.adapter === "compatible") {
     const name = provider.secret_name || "AI_COMPATIBLE_API_KEY";
-    if (!COMPATIBLE_SECRETS.has(name)) {
+    if (!compatibleSecretNames.includes(name)) {
       throw new HttpError(422, "The compatible provider uses an unsupported secret name");
     }
     return name;
@@ -228,7 +201,7 @@ function compatibleBaseURL(provider: Provider) {
   }
   if (
     url.protocol !== "https:" ||
-    !COMPATIBLE_HOSTS.has(url.hostname) ||
+    !Object.values(compatibleHosts).includes(url.hostname) ||
     url.username ||
     url.password ||
     url.port ||
@@ -236,6 +209,10 @@ function compatibleBaseURL(provider: Provider) {
     url.hash
   ) {
     throw new HttpError(422, "The compatible provider URL must use an approved HTTPS API host");
+  }
+  const expectedHost = compatibleHosts[provider.secret_name || ""];
+  if (expectedHost && url.hostname !== expectedHost) {
+    throw new HttpError(422, "The selected secret requires the API host " + expectedHost);
   }
   return url.toString().replace(/\/+$/, "");
 }
@@ -299,7 +276,7 @@ async function invokeGemini(
       generationConfig: {
         temperature,
         maxOutputTokens,
-        thinkingConfig: { thinkingLevel: "LOW" },
+        ...(/^gemini-3[.-]/i.test(provider.model) ? { thinkingConfig: { thinkingLevel: "LOW" } } : {}),
       },
     }),
   });
@@ -314,7 +291,7 @@ async function invokeGemini(
         throw new HttpError(Number(event.error.code) || 502, event.error.message || "Gemini stream failed");
       }
       const delta = (event.candidates?.[0]?.content?.parts || [])
-        .map((part: { text?: string }) => part.text || "").join("");
+        .map((part: { text?: string; thought?: boolean }) => part.thought ? "" : part.text || "").join("");
       if (delta) {
         answer += delta;
         await emit(answer);
@@ -325,7 +302,7 @@ async function invokeGemini(
   } else {
     const payload = await response.json();
     answer = (payload.candidates?.[0]?.content?.parts || [])
-      .map((part: { text?: string }) => part.text || "").join("").trim();
+      .map((part: { text?: string; thought?: boolean }) => part.thought ? "" : part.text || "").join("").trim();
     inputTokens = payload.usageMetadata?.promptTokenCount ?? null;
     outputTokens = payload.usageMetadata?.candidatesTokenCount ?? null;
     if (answer && streaming) await emit(answer);
@@ -354,20 +331,23 @@ async function invokeOpenAICompatible(
     "Content-Type": "application/json",
   };
   if (provider.adapter === "openrouter") headers["X-Title"] = "MYRA";
+  const directOpenAI = provider.adapter === "openai";
+  const reasoningModel = directOpenAI && /^(?:gpt-5|o[1-9])(?:[.-]|$)/i.test(provider.model);
   const body: Record<string, unknown> = {
     model: provider.model,
     messages: [
       ...(systemText(messages) ? [{ role: "system", content: systemText(messages) }] : []),
       ...openAIMessages(messages),
     ],
-    temperature,
-    max_tokens: maxOutputTokens,
+    ...(reasoningModel ? {} : { temperature }),
+    [directOpenAI ? "max_completion_tokens" : "max_tokens"]: reasoningModel ? Math.max(1024, maxOutputTokens) : maxOutputTokens,
     stream: streaming,
   };
   if (streaming && ["openai", "openrouter"].includes(provider.adapter)) {
     body.stream_options = { include_usage: true };
   }
   const response = await fetch(baseURL + "/chat/completions", {
+    redirect: "error",
     method: "POST",
     headers,
     signal: AbortSignal.timeout(timeoutMs),
@@ -426,7 +406,7 @@ async function invokeAnthropic(
     body: JSON.stringify({
       model: provider.model,
       max_tokens: maxOutputTokens,
-      temperature,
+      temperature: Math.min(1, temperature),
       system: systemText(messages),
       messages: converted,
       stream: streaming,
@@ -512,7 +492,7 @@ function implicitGemini(): Provider {
   return {
     name: "Google Gemini (automatic fallback)",
     adapter: "gemini",
-    model: Deno.env.get("GEMINI_CHAT_MODEL") || "gemini-3.6-flash",
+    model: "GEMINI_CHAT_MODEL",
     priority: 1000,
     enabled: true,
     supports_vision: true,
@@ -573,14 +553,19 @@ export async function completeWithProviders(
   const failures: string[] = [];
   let lastFailure: HttpError | null = null;
 
-  for (const provider of providers) {
+  for (const row of providers) {
+    const provider = { ...row, model: row.adapter === "gemini" ? geminiModelId(row.model) : row.model.trim() };
+    let key: string | undefined;
     let streamedAnswer = "";
     const emit = async (partial: string) => {
       streamedAnswer = partial;
       if (onDelta) await onDelta(partial);
     };
     try {
-      const key = providerKey(provider);
+      if (!provider.model || provider.model === "YOUR_MODEL_ID") {
+        throw new HttpError(422, "Enter a model ID available to your provider account before testing or enabling this provider.");
+      }
+      key = providerKey(provider);
       const configuredTemperature = Number(provider.temperature);
       const temperature = Number.isFinite(configuredTemperature)
         ? configuredTemperature
@@ -632,7 +617,9 @@ export async function completeWithProviders(
       });
       return result.answer;
     } catch (error) {
-      const failure = normalizeFailure(error, provider);
+      const detail = normalizeFailure(error, provider);
+      const message = key ? detail.message.replaceAll(key, "[redacted]") : detail.message;
+      const failure = new HttpError(detail.status, message.slice(0, 1200));
       await recordUsage(ctx, operation, provider, null, failure.message);
       lastFailure = failure;
       failures.push(provider.name + " (" + provider.model + "): " + failure.message);
@@ -644,7 +631,7 @@ export async function completeWithProviders(
         partialOutput: streamedAnswer.length > 0,
         error: failure.message,
       });
-      if (streamedAnswer.length > 0 || failure.status === 413 || failure.status === 422) {
+      if (streamedAnswer.length > 0 || error instanceof AttachmentError || options.providerId || options.adapter) {
         throw failure;
       }
     }
