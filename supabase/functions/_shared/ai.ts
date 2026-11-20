@@ -160,8 +160,19 @@ export async function generate(ctx: Context, sourceId: string) {
       continue;
     }
     const job = "reply/" + source.id + "/" + speaker;
-    const token = checked(await service.rpc("claim_ai_job", { actor, job }));
-    if (!token) throw new Error("Response already processing. Refresh the conversation.");
+    const claim = await service.rpc("claim_ai_job", { actor, job });
+    if (claim.error) throw new Error(claim.error.message);
+    if (!claim.data) {
+      // The first request may have completed between the initial read and the claim.
+      const completed = checked(await db.from("messages").select("id")
+        .eq("source_id", source.id).eq("character_id", speaker).eq("is_streaming", false).limit(1));
+      if (completed.length) {
+        replies.push(completed[0].id);
+        continue;
+      }
+      throw new HttpError(409, "A response is still being generated for this message.");
+    }
+    const token = claim.data;
     let streamedReplyId: string | null = null;
     try {
       const profile = checked(

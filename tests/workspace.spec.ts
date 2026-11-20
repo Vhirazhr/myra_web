@@ -56,6 +56,7 @@ async function login(p: Page, email: string) {
   await p.getByLabel("Email address").fill(email);
   await p.getByLabel("Password", { exact: true }).fill(password);
   await p.getByRole("button", { name: "Enter MYRA" }).click();
+  await expect(p.getByLabel("Email address")).toBeHidden();
 }
 async function create(p: Page, name: string) {
   await p.getByRole("button", { name: "Create " + name, exact: true }).click();
@@ -301,7 +302,7 @@ test("4–5 · provider inference, persisted memory, scoped retrieval and group 
   await page.goto("/chat/" + later.id);
   await page.getByLabel("Message", { exact: true }).fill("Which flower is my favorite?");
   await page.getByRole("button", { name: "Send", exact: true }).click();
-  await expect(page.locator(".ai-bubble")).toContainText(/\bjasmin(?:e)?\b/i, { timeout: 95000 });
+  await expect(page.locator(".ai-bubble > p").first()).toContainText(/\bjasmin(?:e)?\b/i, { timeout: 95000 });
   await page.reload();
   await expect(page.locator(".ai-bubble")).toHaveCount(1);
   expect(
@@ -339,6 +340,10 @@ test("4–5 · provider inference, persisted memory, scoped retrieval and group 
       .eq("role", "user")
       .single(),
   ).data!;
+  await expect.poll(async () => {
+    const replies = ok(await client.from("messages").select("id").eq("source_id", source.id).eq("is_streaming", false));
+    return replies.data?.length;
+  }, { timeout: 95000 }).toBe(2);
   const retry = await client.functions.invoke("myra", {
     body: { action: "generate", id: source.id },
   });
@@ -598,6 +603,11 @@ test("worker runs due schedules with the browser closed and respects quiet hours
           model: process.env.MYRA_E2E_MODEL,
         }),
       );
+    expect((await tick()).initiatives).toBe(0);
+    ok(await client.from("messages").insert({
+      conversation_id: thread.id, role: "user", body: "Let's talk about the garden tomorrow.",
+      created_at: "2020-01-02T08:00:00Z",
+    }));
     expect((await tick()).initiatives).toBe(1);
     expect((await tick()).initiatives).toBe(0);
     expect(
@@ -765,4 +775,20 @@ test("deleting chat messages preserves media shared from the character studio", 
   await expect(page.getByText("Start the conversation.")).toBeVisible();
   const original = ok(await client.storage.from("stories").download(path)).data!;
   expect(Buffer.from(await original.arrayBuffer())).toEqual(png);
+});
+
+test("a concurrent generation request reports an active reply without duplicating it", async () => {
+  const character = ok(await client.from("characters").insert({ name: "Pending reply" }).select("id").single()).data!;
+  const thread = ok(await client.from("conversations").insert({ name: "Pending chat", character_id: character.id }).select("id").single()).data!;
+  const source = ok(await client.from("messages").insert({ conversation_id: thread.id, role: "user", body: "Hello" }).select("id").single()).data!;
+  const job = "reply/" + source.id + "/" + character.id;
+  const token = ok(await admin.rpc("claim_ai_job", { actor: owner, job })).data;
+  try {
+    const retry = await client.functions.invoke("myra", { body: { action: "generate", id: source.id } });
+    expect(retry.error?.context?.status).toBe(409);
+    expect((await retry.error.context.json()).error).toContain("still being generated");
+    expect(ok(await client.from("messages").select("id").eq("source_id", source.id)).data).toEqual([]);
+  } finally {
+    ok(await admin.rpc("release_ai_job", { actor: owner, job, token }));
+  }
 });
